@@ -121,12 +121,14 @@ Use the **[Databricks GenAI Pricing Calculator](https://www.databricks.com/produ
 - **Average output tokens** per request — from `profile_workload.ipynb`
 - **QPM floor** — your P75–P90 from above, not your average and not your peak
 
+The model unit count is calibrated to the I/O ratio you input. Because output tokens are compute-heavier than input tokens, the recommendation will undersize if your production requests run longer outputs than profiled. If output length varies across request types, size against the most output-heavy distribution you expect to serve.
+
 Burst scaling and PPT fallback handle everything above your provisioned floor.
 
 #### Validate empirically
 
 1. Deploy at the recommended model unit level
-2. Load test with traffic that matches your real input/output distribution
+2. Load test with traffic that matches your real input/output distribution — shorter outputs during testing will understate capacity consumption and produce a false ceiling
 3. Observe where you start seeing 429s — that is your actual capacity ceiling
 4. Adjust model units and repeat if needed
 
