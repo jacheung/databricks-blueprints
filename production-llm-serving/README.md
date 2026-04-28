@@ -94,17 +94,13 @@ This is your PPT capacity ceiling for your specific workload shape. If your expe
 
 ### 2. Size Your PT Endpoint
 
-#### Determine your QPM
+`profile_workload.ipynb` already measured your average input and output tokens per request — those go directly into the pricing calculator. The only remaining input is your **QPM floor**.
 
-QPM is a demand metric — it comes from your application traffic, not from profiling LLM calls. How you get it depends on your situation.
+#### Determine your QPM floor
 
-**Existing workload being migrated**
+**Existing workload** — QPM is already in your observability stack (Datadog, Grafana, CloudWatch, Databricks system tables). Pull the distribution over a representative window (1–2 weeks captures daily and weekly rhythm) and use P75–P90.
 
-QPM already exists in your observability stack (Datadog, Grafana, CloudWatch, Databricks system tables). Pull the distribution over a representative window (1–2 weeks captures daily and weekly rhythm), then use P75–P90 as your sizing input.
-
-**Net new workload**
-
-Model it from business inputs. The right formula depends on your application type:
+**Net new workload** — estimate from business inputs:
 
 | App type | QPM estimate |
 |---|---|
@@ -113,7 +109,7 @@ Model it from business inputs. The right formula depends on your application typ
 | Batch enrichment | `records_per_batch ÷ SLA_window_in_minutes` |
 | RAG pipeline | `user_query_rate_per_min × LLM_calls_per_query` |
 
-These formulas give you an average QPM. Apply a 2–3× safety factor to account for burst patterns and ramp-up.
+These formulas give an average QPM. Apply a 2–3× safety factor for burst and ramp-up.
 
 #### Use the pricing calculator
 
@@ -121,11 +117,11 @@ Use the **[Databricks GenAI Pricing Calculator](https://www.databricks.com/produ
 
 - Cloud provider + region
 - Model
-- **Average input tokens** per request
-- **Average output tokens** per request
-- **QPM floor** — your P75–P90, not your average and not your peak
+- **Average input tokens** per request — from `profile_workload.ipynb`
+- **Average output tokens** per request — from `profile_workload.ipynb`
+- **QPM floor** — your P75–P90 from above, not your average and not your peak
 
-The calculator asks for one number. For bursty workloads that number should be your **QPM floor**: the sustained load you want to guarantee will never degrade. Burst scaling and PPT fallback handle everything above it.
+Burst scaling and PPT fallback handle everything above your provisioned floor.
 
 #### Validate empirically
 
@@ -134,12 +130,14 @@ The calculator asks for one number. For bursty workloads that number should be y
 3. Observe where you start seeing 429s — that is your actual capacity ceiling
 4. Adjust model units and repeat if needed
 
-#### Understand your full capacity stack
+### 3. Serve Requests: PT with PPT Fallback
+
+PT provisioned capacity guarantees your QPM floor, but traffic is never flat. `pt_ppt_router.ipynb` implements a three-layer stack that handles overflow without requiring you to overprovision PT for every possible spike.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  PPT fallback          ← QPM spikes PPT by itself    │
-│                           cannot handle              │
+│  PPT fallback          ← QPM spikes PT burst         │
+│                           cannot absorb              │
 ├─────────────────────────────────────────────────────┤
 │  PT burst (100 units)  ← moderate QPM spikes above   │
 │                           your provisioned floor     │
@@ -149,26 +147,34 @@ The calculator asks for one number. For bursty workloads that number should be y
 └─────────────────────────────────────────────────────┘
 ```
 
-- **PT provisioned** is your guaranteed floor — always available
-- **PT burst** steps up one model unit increment automatically when capacity exists in the region — not guaranteed
-- **PPT fallback** is your elastic safety net for QPM spikes that neither the provisioned floor nor burst scaling can absorb
+**PT provisioned** — your guaranteed floor, always available. Size this at P75–P90 QPM so routine traffic never touches the other layers.
 
----
+**PT burst** — when traffic exceeds the provisioned floor, Databricks automatically steps up one model unit increment (e.g., 50 → 100 units) if regional capacity is available. This happens without any configuration change, but it is best-effort: when burst capacity is unavailable, the endpoint returns 429.
 
-## Architecture
+**PPT fallback** — when PT returns a 429 or 503, `pt_ppt_router.ipynb` retries the request immediately against the equivalent pay-per-token model. PPT is elastic shared infrastructure: it has throughput ceilings (calculated in Section 1) but no provisioned capacity to exhaust, making it the right layer to absorb spikes that PT burst cannot.
 
+#### How `pt_ppt_router.ipynb` implements the fallback
+
+Every call goes through the `PTWithPPTFallback.predict()` method:
+
+1. The request is sent to the PT endpoint
+2. On a 429 (capacity exceeded) or 503 (service unavailable), the client retries immediately against the PPT model — same messages, same parameters, same return type
+3. The routing is transparent to the caller; streaming and non-streaming both follow the same path
+
+The status codes that trigger fallback are configurable in `config.yml`:
+
+```yaml
+model_serving:
+  fallback_status_codes:
+    - 429  # capacity exceeded
+    - 503  # service unavailable
 ```
-Application
-    │
-    ▼
-query_endpoint.py / query()
-    │
-    ├─► PT endpoint (provisioned + burst)   ◄── primary
-    │
-    └─► PPT (same model)                    ◄── fallback on 429 / 503
-```
 
-Requests always go to PT first. On capacity errors the client automatically retries against the PPT model. Both paths use the same OpenAI-compatible API and support streaming.
+#### When PPT fallback is and isn't sufficient
+
+The fallback is designed to absorb short, unpredictable bursts — not sustained overload. A request routed to PPT is subject to PPT's throughput ceilings. If a spike is large enough or lasts long enough, PPT will also saturate — its ceiling for your specific workload shape is the `ppt_max_qpm` that `profile_workload.ipynb` calculated.
+
+If your fallback rate is consistently elevated, that is a signal to increase PT model units, not to rely on PPT as a permanent second tier.
 
 ---
 
@@ -178,4 +184,4 @@ Requests always go to PT first. On capacity errors the client automatically retr
 |---|---|
 | `config.yml` | All configurable parameters — endpoint names and serving settings |
 | `profile_workload.ipynb` | Profile your workload on PPT: measure input/output tokens, TTFT, TPOT |
-| `query_endpoint.ipynb` | Query PT endpoint with PPT fallback |
+| `pt_ppt_router.ipynb` | MLflow pyfunc model: PT endpoint with PPT fallback routing |
