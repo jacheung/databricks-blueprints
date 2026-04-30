@@ -5,7 +5,7 @@ This blueprint helps you size and deploy a production LLM serving architecture o
 ---
 
 <p align="center">
-  <img src="pt_capacity_frontier.png" alt="Capacity Frontiers" width="820" />
+  <img src="assets/pt_capacity_frontier.png" alt="Capacity Frontiers" width="820" />
   <br/>
   <em>PT provisioned capacity, burst, and PPT fallback plotted as capacity frontiers. Output tokens are 4–20× more compute-intensive than input tokens — the binding constraint for most workloads.</em>
 </p>
