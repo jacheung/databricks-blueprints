@@ -15,7 +15,7 @@ From these, derive your throughput demand: `ITPM = input_tokens × QPM` and `OTP
 <p align="center">
   <img src="assets/pt_capacity_frontier.png" alt="Capacity Frontiers" width="820" />
   <br/>
-  <em>PT provisioned capacity, burst, and PPT fallback plotted as capacity frontiers. Output tokens are 4–20× more compute-intensive than input tokens — the binding constraint for most workloads. A RAG request (2,000 input / 200 output) and a code generation request (200 input / 2,000 output) carry the same total tokens but land in completely different positions on these frontiers.</em>
+  <em>PT provisioned capacity, burst, and PPT fallback plotted as capacity frontiers. Output tokens are 4–20× more compute-intensive than input tokens, making output throughput the binding constraint for most workloads. A RAG request (2,000 input / 200 output) and a code generation request (200 input / 2,000 output) carry the same total tokens but land in completely different positions on these frontiers.</em>
 </p>
 
 ---
