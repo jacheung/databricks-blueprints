@@ -44,12 +44,17 @@ Dedicated capacity measured in **model units**, billed hourly. Guarantees a thro
 
 ### Step 1 — Profile your workload (`profile_workload.ipynb`)
 
-Run the profiling notebook against a PPT endpoint. It measures:
-- Average input tokens per request
-- Average output tokens per request
-- TTFT and TPOT
+Run the profiling notebook against a PPT endpoint. It is organized into independent workload cells — run only the ones that match your pattern:
 
-Do not estimate — real input/output distributions vary significantly by use case.
+| Cell | Run if you have… |
+|---|---|
+| RAG / Retrieval | A vector DB retrieval step that assembles context into the prompt |
+| Multi-turn chat | A conversational assistant with session history |
+| Agentic / tool-calling | An agent that makes multiple LLM calls per request (uses MLflow traces) |
+
+Mix and match freely — a chatbot that also does RAG should run both cells. Each cell appends to a shared `results` collector that feeds the summary and capacity calculation.
+
+Do not estimate token counts — real input/output distributions vary significantly by workload type, and the wrong profile will produce the wrong PT sizing.
 
 ### Step 2 — Check whether PPT is sufficient
 
