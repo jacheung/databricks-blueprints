@@ -23,6 +23,8 @@ Delta Lake + Parquet is the right default for most ML workloads on Databricks. I
 
 CNN training needs raw pixels on every batch, so image bytes are stored inline. Parquet lays rows out in ~128MB row groups; at ~100KB/image those groups collapse from ~128K rows to ~1,280, so a random batch of 64 images reads gigabytes to retrieve a few megabytes — and because all columns in a row group are co-located, every metadata scan drags the image bytes along with it. Lance stores binary payloads in an isolated blob file with fragment-level O(1) random access: a shuffled batch read fetches exactly the rows it needs at constant cost regardless of dataset size, and a metadata scan never touches the image bytes.
 
+> **Why the benchmark's Delta path (`benchmark/01a`) stores image *paths*, not inline bytes.** Delta can hold the JPEG bytes inline in a `binary` column — but under the shuffled, random-access sampling that training DataLoaders do, that's an anti-pattern, not a fair Delta: every random batch triggers full ~128MB row-group scans (the collapse above), so inline Delta would look *worse* than the path-reference pattern, not better. Storing an `image_path` reference to files in a UC Volume is what practitioners actually run at scale, so `01a` writes it that way — the per-image Volumes GET on each batch is the real, representative Delta cost the benchmark measures, not a strawman.
+
 |  | Lance | Delta |
 |--|-------|-------|
 | Random-access batch sampling | O(1) per row, fragment-level addressing | Row-group scan — 128MB per 1,280-row group for images |
