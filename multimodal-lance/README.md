@@ -13,6 +13,40 @@ The foundational image ML problem types — **classification**, **object detecti
 
 ---
 
+## Key highlights
+
+Three ways to store images for training on Databricks, compared. **Delta (path-ref)** = the standard pattern (JPEG files in a Volume + an `image_path` column); **Delta (inline)** = bytes in a `binary` column; **Lance** = bytes inline in a blob-isolated fragment layout.
+
+> ⚠️ *Preliminary — based on a 10k correctness-tier run with streaming Ray Data → Ray Train (block-order + local-buffer shuffle). To be revisited at larger tiers.*
+
+### Read (training throughput)
+
+With a **streaming** shuffle (the idiomatic Ray Data pattern — sequential block scan, then block-order + local-buffer shuffle, *not* per-batch random row access), the storage layout matters less than expected:
+
+| | Lance | Delta (inline) | Delta (path-ref) |
+|--|-------|----------------|------------------|
+| Training throughput | baseline | **≈ Lance** | **~1.4× slower** |
+| Time-to-first-batch | fast | ≈ Lance | ~2× slower |
+| Why | direct object-store read, no warehouse | bulk SQL scan, bytes shipped inline | one Volumes GET **per image, per batch** |
+
+**Takeaway:** the clear read-side loser is **path-ref Delta** — the per-image GET on every batch is a real, representative cost. **Inline Delta ≈ Lance** for streaming reads: neither pays a random-access penalty, because streaming doesn't do storage-layer random access. Lance's remaining read edge is structural, not throughput-at-small-scale: it reads object storage directly and skips the shared **SQL warehouse** that both Delta readers route through (a contention/cost chokepoint at scale).
+
+### Write (ingest, ETL, data management)
+
+This is where Lance's advantages are decisive and unmanufactured:
+
+| | Lance | Delta (inline) | Delta (path-ref) |
+|--|-------|----------------|------------------|
+| Write scalability | distributed fragments | **funnels every byte through Spark → OOMs at 1M+** | parallel file writes |
+| Object-store PUTs | ~one per fragment (dozens) | one per Parquet file | **~one per image** |
+| Add a feature column | `add_columns` — no rewrite of existing data | `ALTER` + full row-group rewrite (drags image bytes) | `ALTER` + rewrite (metadata only) |
+| Large blobs (video, docs) | blob layout, no per-cell cap issue | **~2.1GB per-cell Parquet/JVM ceiling** | fine (bytes are in files) |
+| Dataset versioning | first-class fragment versions | Delta time-travel | Delta time-travel |
+
+**Takeaway:** for the *training read path* at small/moderate scale, inline Delta is a legitimate option. Lance's real, durable value is on the **write and data-management side** — it scales the ingest that inline Delta can't, backfills features without rewriting image bytes, and handles large blobs Parquet's per-cell ceiling can't.
+
+---
+
 ## The standard Databricks path for ML
 
 Delta Lake + Parquet is the right default for most ML workloads on Databricks. It provides Unity Catalog governance, SQL access, Photon-accelerated queries, time-travel, and native integration with MLflow and Feature Store. For tabular features — structured data like user events, transactions, and numerical features — Delta is the correct choice with no caveats.
