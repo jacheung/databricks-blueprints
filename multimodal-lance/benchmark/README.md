@@ -79,17 +79,20 @@ Because `01a` writes N image files and `01b` writes ~fragments, the PUT-count ga
 
 **A separate, real ETL benchmark** runs alongside each write (Delta's in `01a`, Lance's in `01b`): compute a derived column once and backfill it into the existing dataset. This is where Lance has a structural advantage — its data-evolution / `add_columns` support backfills a new column without rewriting existing data, where Delta's metadata table needs an `ALTER TABLE ADD COLUMN` + full backfill rewrite. Each notebook measures wall-clock and total bytes rewritten for its format and persists them to `artifacts/`.
 
-**Metrics for the inline preprocessing step (both branches):**
-
-- Decode/resize throughput (rows/sec) under full-column read vs projected/column-selective read (image + id only, skipping embedding/text)
-- For Delta: the extra per-image Volumes GET hop that Lance's inline layout avoids
-- CPU utilization on the transform actors
+Because decode/resize is fused into the read path, there's **no separate data-loading pass** — the dummy training run in stage 5 (streams and decodes every batch but skips the GPU step) *is* the data-loading ceiling. That avoids paying for a GPU cluster to sit idle during a redundant CPU-only pass, and keeps the loading number measured under the same DDP-sharded pipeline that feeds training. The per-image Volumes GET hop (Delta) and CPU utilization on the transform actors surface there.
 
 ### 5. Train — Delta / Lance
 
-Feed the (branch-specific) dataset through Ray Train via `iter_torch_batches`, with a shuffled/random-access read pattern per epoch — this is the pattern most likely to separate the two formats; a sequential full scan will look similar for both.
+Feed the (branch-specific) dataset through Ray Train via `iter_torch_batches`, with a **streaming** shuffle per epoch — this exercises the random-access read pattern most likely to separate the two formats; a global all-to-all shuffle reads sequentially (a full scan) and is exactly the case where the two formats look most alike.
 
-Run twice per branch: once with a no-op dummy model step (isolates pure data-loading throughput), once with a real small model (attributes the bottleneck between I/O and compute).
+**Streaming, not global, shuffle.** A global `random_shuffle()` is a blocking barrier: the GPUs idle at time-to-first-batch until the entire dataset has been read, decoded, and reshuffled through the object store (spilling to disk at the 1M/10M tiers). Instead, combine two non-blocking mechanisms:
+
+- `randomize_block_order()` — cheap, metadata-only per-epoch reorder of which blocks read first. This is what varies the read order at the storage layer, exercising Lance's O(1) fragment-level random access vs Delta's row-group scans.
+- `iter_torch_batches(local_shuffle_buffer_size=N)` — a sliding in-memory buffer that samples rows as they stream, giving SGD per-row entropy without materializing the full dataset.
+
+Pipelined and non-blocking, this keeps the GPU fed *and* sharpens the format difference the benchmark exists to measure rather than hiding it behind a sequential scan.
+
+Run twice per branch: once with a no-op dummy model step (isolates pure data-loading throughput — the ceiling for stage 4), once with a real model (attributes the bottleneck between I/O and compute).
 
 **Metrics to capture:**
 
