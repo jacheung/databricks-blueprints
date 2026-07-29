@@ -17,7 +17,7 @@ The foundational image ML problem types — **classification**, **object detecti
 
 Three ways to store images for training on Databricks, compared. **Delta (path-ref)** = the standard pattern (JPEG files in a Volume + an `image_path` column); **Delta (inline)** = bytes in a `binary` column; **Lance** = bytes inline in a blob-isolated fragment layout.
 
-> Measured across **10k and 100k** tiers with streaming Ray Data → Ray Train (block-order + local-buffer shuffle), 4 × A10 DDP. Headline metrics are **samples/sec** and **time-to-first-batch (TTFB)** — both end-to-end wall-clock, immune to async-CUDA timing artifacts. Larger tiers (1M/10M) still to come.
+> Measured across **10k and 100k** tiers with streaming Ray Data → Ray Train (block-order + local-buffer shuffle) on **2 × A10 (16 CPU each)** DDP. Headline metrics are **samples/sec** and **time-to-first-batch (TTFB)** — both end-to-end wall-clock, immune to async-CUDA timing artifacts. Larger tiers (1M/10M) still to come.
 
 ### Read (training throughput) — inline Delta ties Lance; path-ref is the loser
 
