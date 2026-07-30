@@ -17,37 +17,39 @@ The foundational image ML problem types — **classification**, **object detecti
 
 Three ways to store images for training on Databricks, compared. **Delta (path-ref)** = the standard pattern (JPEG files in a Volume + an `image_path` column); **Delta (inline)** = bytes in a `binary` column; **Lance** = bytes inline in a blob-isolated fragment layout.
 
-> Measured across **10k and 100k** tiers with streaming Ray Data → Ray Train (block-order + local-buffer shuffle) DDP. The 10k and 100k tiers run on **2 × A10 (16 CPU each)**; the 1M tier runs on **4 × A10 (32 CPU each)**. Headline metrics are **samples/sec** and **time-to-first-batch (TTFB)** — both end-to-end wall-clock, immune to async-CUDA timing artifacts. Larger tiers (1M/10M) still to come.
+> Measured across **10k, 100k, and 1M** tiers with streaming Ray Data → Ray Train (block-order + local-buffer shuffle) DDP. Training runs on A10 GPUs (2 × A10 for 10k/100k, 4 × A10 for 1M). **Write and backfill are node-matched**: a 14-worker cluster split 7 Ray (generate/Lance-write) + 7 Spark (Delta-write), so Delta-vs-Lance write times are compute-for-compute, not skewed by node count. Delta reads route through a tier-sized SQL warehouse (Small at 10k/100k, Large at 1M). Headline metrics are **samples/sec** and **time-to-first-batch (TTFB)** — both end-to-end wall-clock, immune to async-CUDA timing artifacts.
 
 ### Read (training throughput) — inline Delta ties Lance; path-ref is the loser
 
 Two points, both a direct consequence of *streaming* the data (the idiomatic Ray Data pattern — sequential block scan, then block-order + local-buffer shuffle, **not** per-batch random row access):
 
-- **No random-access penalty, so inline Delta ≈ Lance — and it holds across scale.** Streaming never does storage-layer random reads, so the layout that would separate the formats (Lance's O(1) fragment addressing vs Parquet row groups) never gets exercised. Inline Delta lands at **0.98× Lance at 10k and 1.03× at 100k** — a dead tie both tiers, i.e. not a small-scale fluke. For the training *read* path, inline Delta is a legitimate option.
-- **TTFB is the big tell for path-ref, and the gap widens with scale.** Path-ref Delta pays one Volumes GET **per image, per batch**; that tax compounds as the dataset grows. Throughput slips from **0.69× → 0.40× Lance (10k → 100k)** and TTFB blows out from **~2× → ~6× slower** (10.3s → 96.8s for Lance vs 21.3s → **593s** for path-ref) — nearly 10 minutes of idle GPUs before the first step at 100k. Lance's one structural read edge that streaming *doesn't* erase: it reads object storage directly and skips the shared **SQL warehouse** both Delta readers route through.
+- **No random-access penalty, so inline Delta ≈ Lance — and it holds across every tier.** Streaming never does storage-layer random reads, so the layout that would separate the formats (Lance's O(1) fragment addressing vs Parquet row groups) never gets exercised. Inline Delta lands at **0.98× / 1.03× / 0.98× Lance (10k / 100k / 1M)** — a dead tie at all three tiers, not a small-scale fluke. If anything inline Delta is a hair *faster* to first batch at scale (TTFB 88.4s vs 96.8s at 100k; 208.7s vs 248.9s at 1M) — Lance carries no read-startup edge here. For the training *read* path, inline Delta is a legitimate option.
+- **TTFB is the big tell for path-ref, and the gap widens with scale.** Path-ref Delta pays one Volumes GET **per image, per batch**; that tax compounds as the dataset grows. Throughput slips from **0.69× → 0.40× Lance (10k → 100k)** and TTFB blows out from ~2× to ~6× slower (10.3s → 96.8s for Lance vs 21.3s → **593s** for path-ref) — nearly 10 minutes of idle GPUs before the first step at 100k. (Path-ref is so clearly the read-side loser by 100k that we didn't carry it to 1M.) Lance's one structural read edge that streaming *doesn't* erase: it reads object storage directly and skips the **SQL warehouse** both Delta readers route through.
 
-| | Lance | Delta (inline) | Delta (path-ref) |
+| Read (streaming train) | Lance | Delta (inline) | Delta (path-ref) |
 |--|-------|----------------|------------------|
-| Throughput vs Lance (10k → 100k) | baseline | **0.98× → 1.03×** (tie) | **0.69× → 0.40×** (widening) |
-| TTFB vs Lance (10k → 100k) | 10.3s → 96.8s | ≈ Lance | **~2× → ~6× slower** (593s @ 100k) |
+| Throughput vs Lance (10k → 100k → 1M) | baseline | **0.98× → 1.03× → 0.98×** (tie) | **0.69× → 0.40×** (widening) |
+| TTFB (10k → 100k → 1M) | 10.3s → 96.8s → 248.9s | 10.7s → 88.4s → 208.7s (≈ Lance, edges ahead at scale) | 21.3s → **593s** (path-ref not run at 1M) |
 | Why | direct object-store read, no warehouse | bulk SQL scan, bytes shipped inline | one Volumes GET **per image, per batch** |
 
 ### Write & update — Lance's decisive, unmanufactured advantage
 
-Two points, this time favoring Lance so strongly the trend line is the story:
+Three points, all favoring Lance so strongly the trend line is the story — and now on a **node-matched** cluster (7 Ray vs 7 Spark), so this is compute-for-compute, not a node-count artifact:
 
-- **Ingest scales flat; the Delta paths don't.** Lance writes via distributed fragment commits: **4.5s / 16 files → 6.4s / 64 files (10k → 100k)** — essentially flat, ~one PUT per fragment. Path-ref Delta issues **~one object-store PUT per image** — a literal PUT storm of **10,001 → 100,001 files** and **81s → 554s** wall-clock. Inline Delta avoids the file storm (16 → 64 files) but funnels **every image byte through Spark**, which is what caps it — fine at 100k (38s), projected to OOM at 1M+.
-- **Feature backfill: Lance rewrites almost nothing; inline Delta rewrites the whole table.** Adding a derived column with Lance `add_columns` writes only the new column — **0.1 MB → 0.5 MB (10k → 100k)**, flat regardless of image payload. Inline Delta's `ALTER` drags all the image bytes through a full row-group rewrite: **688 MB → 6,867 MB**, scaling linearly with the dataset (→ ~69 GB projected at 1M). Path-ref's backfill is cheap in bytes (metadata only, ~190 MB) but only because the images never lived in the table — the cost you deferred is paid back on every read.
+- **Ingest scales flat; the Delta paths don't.** Lance writes via distributed fragment commits: **3.4s → 5.1s → 26.6s (10k → 100k → 1M)**, ~one PUT per fragment (16 → 64 → 600 files). Path-ref Delta issues **~one object-store PUT per image** — a literal PUT storm of **10,001 → 100,001 files** and **48.7s → 266.8s** wall-clock (so clearly losing we didn't carry it to 1M). Inline Delta avoids the file storm (16 → 64 → 600 files) but funnels **every image byte through Spark**, which is what caps it: fine at small scale (14.9s / 13.4s at 10k / 100k) but **242.5s at 1M — 9.1× behind Lance's 26.6s**. The funnel is a *scale* effect, not a constant tax: it stays cheap until the data volume saturates Spark, then degrades sharply.
+- **Feature backfill: Lance now wins on *both* bytes and wall-clock.** Adding a derived column with Lance's distributed `merge_columns` writes only the new column — **0.1 → 0.5 → 3.8 MB (10k → 100k → 1M)**, flat regardless of image payload — in **2.4s → 2.7s → 8.8s**. Inline Delta's `ALTER` + `UPDATE` drags all the image bytes through a full row-group rewrite: **688 MB → 6,867 MB → 68,648 MB** and **3.0s → 9.0s → 46.9s** (so Lance is **5.3× faster** at 1M *and* writes ~18,000× fewer bytes). Path-ref's backfill is cheap in bytes (metadata only, ~190 MB at 100k) but only because the images never lived in the table — the cost you deferred is paid back on every read.
+- **Both Lance operations are distributed on Ray**, matching Delta's distributed Spark write/`UPDATE` — so the wall-clock wins are a fair fight, not Lance-parallel vs Delta-serial.
 
-| | Lance | Delta (inline) | Delta (path-ref) |
+| Write & update | Lance | Delta (inline) | Delta (path-ref) |
 |--|-------|----------------|------------------|
-| Write (10k → 100k) | **4.5s → 6.4s**, 16 → 64 files | 10s → 38s, funnels via Spark | 81s → 554s, **10k → 100k files** |
+| Write (10k → 100k → 1M) | **3.4s → 5.1s → 26.6s**, 16 → 64 → 600 files | 14.9s → 13.4s → **242.5s** (funnels via Spark) | 48.7s → 266.8s, **10k → 100k files** (not run at 1M) |
 | Object-store PUTs | ~one per fragment (dozens) | one per Parquet file | **~one per image** |
-| Add-column rewrite (10k → 100k) | **0.1 → 0.5 MB** (new col only) | 688 → **6,867 MB** (drags image bytes) | ~19 → 190 MB (metadata only) |
-| Scale ceiling | distributed fragments | **Spark funnel → OOM at 1M+**; ~2.1GB per-cell Parquet cap | file-count / PUT storm |
+| Add-column time (10k → 100k → 1M) | **2.4s → 2.7s → 8.8s** | 3.0s → 9.0s → 46.9s | 8.7s → 3.2s |
+| Add-column bytes (10k → 100k → 1M) | **0.1 → 0.5 → 3.8 MB** (new col only) | 688 → 6,867 → **68,648 MB** (drags image bytes) | ~19 → 190 MB (metadata only) |
+| Scale behavior | distributed fragments, flat | **Spark funnel — 9.1× behind at 1M**; ~2.1GB per-cell Parquet cap | file-count / PUT storm |
 | Dataset versioning | first-class fragment versions | Delta time-travel | Delta time-travel |
 
-**Takeaway:** for the streaming training *read* path, inline Delta is a genuine tie with Lance — streaming doesn't reward the layout, and we don't pretend otherwise. Lance's real, durable value is on the **write and data-management side**: flat-scaling ingest that inline Delta's Spark funnel can't match, near-zero-rewrite feature backfill (0.5 MB vs 6.9 GB at 100k), and large-blob support past Parquet's per-cell ceiling. Path-ref Delta is the read-side loser on every tier, and the gap only widens with scale.
+**Takeaway:** for the streaming training *read* path, inline Delta is a genuine tie with Lance at all three tiers — streaming doesn't reward the layout, and we don't pretend otherwise (inline even edges Lance on TTFB at scale). Lance's real, durable value is on the **write and data-management side**, and node-matching only sharpened it: flat-scaling ingest (26.6s vs 242.5s = **9.1× at 1M**) that inline Delta's Spark funnel can't match once the data saturates Spark, and feature backfill that now wins on **both** bytes (3.8 MB vs 68.6 GB at 1M) **and** wall-clock (8.8s vs 46.9s = 5.3×), plus large-blob support past Parquet's per-cell ceiling. Path-ref Delta is the read-side loser on every tier, and the gap only widens with scale.
 
 ### Beyond throughput: two Lance capabilities Delta can't match
 
