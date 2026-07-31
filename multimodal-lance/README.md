@@ -47,6 +47,7 @@ Three points, all favoring Lance so strongly the trend line is the story — and
 | Add-column time (10k → 100k → 1M) | **2.4s → 2.7s → 8.8s** | 3.0s → 9.0s → 46.9s | 8.7s → 3.2s |
 | Add-column bytes (10k → 100k → 1M) | **0.1 → 0.5 → 3.8 MB** (new col only) | 688 → 6,867 → **68,648 MB** (drags image bytes) | ~19 → 190 MB (metadata only) |
 | Scale behavior | distributed fragments, flat | **Spark funnel — 9.1× behind at 1M**; ~2.1GB per-cell Parquet cap | file-count / PUT storm |
+| Max inline blob (per cell) | **No limit** — byte-offset addressed | **~2 GB** hard Parquet cap (32-bit length prefix) | n/a — bytes live in Volume files |
 | Dataset versioning | first-class fragment versions | Delta time-travel | Delta time-travel |
 
 **Takeaway:** for the streaming training *read* path, inline Delta is a genuine tie with Lance at all three tiers — streaming doesn't reward the layout, and we don't pretend otherwise (inline even edges Lance on TTFB at scale). Lance's real, durable value is on the **write and data-management side**, and node-matching only sharpened it: flat-scaling ingest (26.6s vs 242.5s = **9.1× at 1M**) that inline Delta's Spark funnel can't match once the data saturates Spark, and feature backfill that now wins on **both** bytes (3.8 MB vs 68.6 GB at 1M) **and** wall-clock (8.8s vs 46.9s = 5.3×), plus large-blob support past Parquet's per-cell ceiling. Path-ref Delta is the read-side loser on every tier, and the gap only widens with scale.
