@@ -62,17 +62,13 @@ Three points, all favoring Lance so strongly the trend line is the story — and
 | Scaling & capabilities | Lance | Delta (inline) | Delta (path-ref) |
 |--|-------|----------------|------------------|
 | Scale behavior | distributed fragments, flat | **Spark funnel — 9.1× behind at 1M**; ~2.1GB per-cell Parquet cap | file-count / PUT storm |
+| Random point-access reads (by-ID row fetch) | **O(1)** — byte-offset addressed, served from the same store | full row-group scan (~128 MB per 1,280-row group) | separate Volumes GET per row |
 | Max inline blob (per cell) | **No limit** — byte-offset addressed | **~2 GB** hard Parquet cap (32-bit length prefix) | n/a — bytes live in Volume files |
 | Dataset versioning | first-class fragment versions | Delta time-travel | Delta time-travel |
 
+*The last three rows are **capability gaps, not stopwatch wins** — the streaming benchmark doesn't exercise them. Random point-access (by-ID fetches for data curation, error analysis, active-learning selection, and vector/ANN retrieval co-located with the image bytes) is served directly from the single versioned Lance store; Delta needs a separate vector DB kept in sync. The ~2 GB per-cell cap only bites on heavier payloads — full-res video, whole-slide pathology, volumetric scans — not the ~150 KB JPEGs here.*
+
 **Takeaway:** for the streaming training *read* path, inline Delta is a genuine tie with Lance at all three tiers — streaming doesn't reward the layout, and we don't pretend otherwise (inline even edges Lance on TTFB at scale). Lance's real, durable value is on the **write and data-management side**, and node-matching only sharpened it: flat-scaling ingest (26.6s vs 242.5s = **9.1× at 1M**) that inline Delta's Spark funnel can't match once the data saturates Spark, and feature backfill that now wins on **both** bytes (3.8 MB vs 68.6 GB at 1M) **and** wall-clock (8.8s vs 46.9s = 5.3×), plus large-blob support past Parquet's per-cell ceiling. Path-ref Delta is the read-side loser on every tier, and the gap only widens with scale.
-
-### Beyond throughput: two Lance capabilities Delta can't match
-
-These aren't stopwatch wins — the streaming benchmark doesn't exercise either — but they're real capability gaps, not performance deltas that wash out at scale:
-
-- **Random point-access reads.** Lance's O(1) byte-offset addressing serves scattered, by-ID row fetches directly from the training store — the pattern behind data curation, error analysis, active-learning selection, and vector/ANN retrieval co-located with the image bytes. Delta can't serve this from the same store (you'd bolt on a separate vector DB and keep it in sync). Against training wall-clock the *latency* saved is negligible; the value is the **capability** and the single versioned store, not speed.
-- **Large blobs past Parquet's per-cell cap.** Parquet encodes a binary cell with a 32-bit length prefix, so a single inline value can't exceed **~2 GB** — a hard format wall that inline Delta hits on full-res video clips, whole-slide pathology images, or volumetric scans. Lance's blob layout addresses payloads by byte-offset with no per-cell ceiling. The current JPEG benchmark (~150 KB/image) never approaches this, but it's the enabling difference for the heavier-payload workloads in the Parking Lot.
 
 ---
 
