@@ -1,0 +1,23 @@
+{
+  "size": "10k",
+  "n_rows": 10000,
+  "common": {
+    "path_label": "lance_native",
+    "write_total_s": 3.417,
+    "target_write_s": 3.417,
+    "n_output_files": 16,
+    "on_disk_bytes": 2071876282,
+    "etl_backfill_s": 2.388,
+    "etl_bytes_written": 54990,
+    "roundtrip_ok": true
+  },
+  "raw": {
+    "raw_image_gb": 0.6687,
+    "lance_write_s": 3.417,
+    "lc_bytes": 2071876282,
+    "n_frag": 16,
+    "lance_backfill_s": 2.388,
+    "lc_bytes_after": 2071931272,
+    "roundtrip_ok": true
+  }
+}

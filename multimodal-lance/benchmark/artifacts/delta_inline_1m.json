@@ -1,0 +1,23 @@
+{
+  "size": "1m",
+  "n_rows": 1000000,
+  "common": {
+    "path_label": "delta_inline",
+    "write_total_s": 242.495,
+    "target_write_s": 242.495,
+    "n_output_files": 600,
+    "on_disk_bytes": 68644406687,
+    "etl_backfill_s": 46.899,
+    "etl_bytes_written": 68647783275,
+    "roundtrip_ok": null
+  },
+  "raw": {
+    "raw_image_gb": null,
+    "inline_write_s": 242.495,
+    "inline_on_disk_bytes": 68644406687,
+    "inline_n_files": 600,
+    "inline_backfill_s": 46.899,
+    "inline_bytes_rewritten": 68647783275,
+    "inline_files_rewritten": 605
+  }
+}

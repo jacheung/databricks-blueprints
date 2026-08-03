@@ -1,0 +1,82 @@
+{
+  "size": "10k",
+  "num_gpu_workers": 2,
+  "num_epochs": 3,
+  "batch_size": 64,
+  "prefetch_batches": 4,
+  "local_shuffle_buffer": 4096,
+  "formats": {
+    "delta": {
+      "dummy": {
+        "samples_per_sec": 128.0778,
+        "epoch_wall_s": 39.0388,
+        "time_to_first_batch_s": 26.7651,
+        "batch_ms_p50": 0.1152,
+        "batch_ms_p95": 0.1379,
+        "batch_ms_p99": 0.169,
+        "wait_ms_p50": 155.2608,
+        "wait_ms_p95": 159.3331,
+        "wait_ms_p99": 6112.9765
+      },
+      "real": {
+        "samples_per_sec": 147.1662,
+        "epoch_wall_s": 33.9752,
+        "time_to_first_batch_s": 21.2746,
+        "batch_ms_p50": 135.0994,
+        "batch_ms_p95": 142.3093,
+        "batch_ms_p99": 205.1515,
+        "wait_ms_p50": 24.0536,
+        "wait_ms_p95": 32.6091,
+        "wait_ms_p99": 4682.8013
+      }
+    },
+    "lance": {
+      "dummy": {
+        "samples_per_sec": 202.3825,
+        "epoch_wall_s": 24.7057,
+        "time_to_first_batch_s": 12.6136,
+        "batch_ms_p50": 0.1755,
+        "batch_ms_p95": 0.2148,
+        "batch_ms_p99": 0.2261,
+        "wait_ms_p50": 152.5989,
+        "wait_ms_p95": 157.609,
+        "wait_ms_p99": 2997.6007
+      },
+      "real": {
+        "samples_per_sec": 214.2776,
+        "epoch_wall_s": 23.3342,
+        "time_to_first_batch_s": 10.3089,
+        "batch_ms_p50": 137.1474,
+        "batch_ms_p95": 146.9965,
+        "batch_ms_p99": 208.0098,
+        "wait_ms_p50": 22.6521,
+        "wait_ms_p95": 43.9559,
+        "wait_ms_p99": 2273.9293
+      }
+    },
+    "delta_inline": {
+      "dummy": {
+        "samples_per_sec": 213.4069,
+        "epoch_wall_s": 23.4294,
+        "time_to_first_batch_s": 11.1606,
+        "batch_ms_p50": 0.1147,
+        "batch_ms_p95": 0.1395,
+        "batch_ms_p99": 0.1691,
+        "wait_ms_p50": 154.7546,
+        "wait_ms_p95": 159.5796,
+        "wait_ms_p99": 2677.5905
+      },
+      "real": {
+        "samples_per_sec": 210.8275,
+        "epoch_wall_s": 23.7161,
+        "time_to_first_batch_s": 10.7037,
+        "batch_ms_p50": 137.2585,
+        "batch_ms_p95": 145.865,
+        "batch_ms_p99": 213.6169,
+        "wait_ms_p50": 24.9283,
+        "wait_ms_p95": 42.8883,
+        "wait_ms_p99": 2364.917
+      }
+    }
+  }
+}
