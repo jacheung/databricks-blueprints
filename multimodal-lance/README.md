@@ -42,8 +42,8 @@ Three points, all favoring Lance so strongly the trend line is the story — and
 
 | Write & update | Lance | Delta (inline) | Delta (path-ref) |
 |--|-------|----------------|------------------|
-| Write (10k → 100k → 1M) | **3.4s → 5.1s → 26.6s**, 16 → 64 → 600 files | 14.9s → 13.4s → **242.5s** (funnels via Spark) | 48.7s → 266.8s, **10k → 100k files** (not run at 1M) |
-| Object-store PUTs | ~one per fragment (dozens) | one per Parquet file | **~one per image** |
+| Write (10k → 100k → 1M) | **3.4s → 5.1s → 26.6s**, 16 → 64 → 600 files | 14.9s → 13.4s → **242.5s** (funnels via Spark), 16 → 64 → 600 files | 48.7s → 266.8s, **10,001 → 100,001 files** (not run at 1M) |
+| Object-store PUTs (10k → 100k → 1M) | **16 → 64 → 600** (one per fragment) | 16 → 64 → 600 (one per Parquet file) | **10,001 → 100,001** (one per image + table; not run at 1M) |
 | Add-column time (10k → 100k → 1M) | **2.4s → 2.7s → 8.8s** | 3.0s → 9.0s → 46.9s | 8.7s → 3.2s |
 | Add-column bytes (10k → 100k → 1M) | **0.1 → 0.5 → 3.8 MB** (new col only) | 688 → 6,867 → **68,648 MB** (drags image bytes) | ~19 → 190 MB (metadata only) |
 | Scale behavior | distributed fragments, flat | **Spark funnel — 9.1× behind at 1M**; ~2.1GB per-cell Parquet cap | file-count / PUT storm |
