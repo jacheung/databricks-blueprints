@@ -36,24 +36,24 @@ Two points, both a direct consequence of *streaming* the data (the idiomatic Ray
 
 Three points, all favoring Lance so strongly the trend line is the story — and now on a **node-matched** cluster (7 Ray vs 7 Spark), so this is compute-for-compute, not a node-count artifact:
 
-- **Ingest scales flat; the Delta paths don't.** Lance writes via distributed fragment commits: **3.4s → 5.1s → 26.6s (10k → 100k → 1M)**, ~one PUT per fragment (16 → 64 → 600 files). Path-ref Delta issues **~one object-store PUT per image** — a literal PUT storm of **10,001 → 100,001 files** and **48.7s → 266.8s** wall-clock (so clearly losing we didn't carry it to 1M). Inline Delta avoids the file storm (16 → 64 → 600 files) but funnels **every image byte through Spark**, which is what caps it: fine at small scale (14.9s / 13.4s at 10k / 100k) but **242.5s at 1M — 9.1× behind Lance's 26.6s**. The funnel is a *scale* effect, not a constant tax: it stays cheap until the data volume saturates Spark, then degrades sharply.
-- **Feature backfill: Lance now wins on *both* bytes and wall-clock.** Backfilling a derived column with Lance's distributed `merge_columns` writes only the new column — **0.1 → 0.5 → 3.8 MB (10k → 100k → 1M)**, flat regardless of image payload — in **2.4s → 2.7s → 8.8s**. Inline Delta's `ALTER` + `UPDATE` drags all the image bytes through a full row-group rewrite: **688 MB → 6,867 MB → 68,648 MB** and **3.0s → 9.0s → 46.9s** (so Lance is **5.3× faster** at 1M *and* writes ~18,000× fewer bytes). Path-ref's backfill is cheap in bytes (metadata only, ~190 MB at 100k) but only because the images never lived in the table — the cost you deferred is paid back on every read.
+- **Ingest scales flat; the Delta paths don't.** Lance writes via distributed fragment commits: **3.8s → 5.1s → 23.5s (10k → 100k → 1M)**, ~one PUT per fragment (16 → 64 → 600 files). Path-ref Delta issues **~one object-store PUT per image** — a literal PUT storm of **10,001 → 100,001 files** and **91.7s → 308.9s** wall-clock (so clearly losing we didn't carry it to 1M). Inline Delta avoids the file storm (16 → 64 → 600 files) but funnels **every image byte through Spark**, which is what caps it: fine at small scale (18.2s / 18.2s at 10k / 100k) but **299.0s at 1M — 12.7× behind Lance's 23.5s**. The funnel is a *scale* effect, not a constant tax: it stays cheap until the data volume saturates Spark, then degrades sharply.
+- **Feature backfill: Lance now wins on *both* bytes and wall-clock.** Backfilling a derived column with Lance's distributed `merge_columns` writes only the new column — **0.1 → 0.5 → 2.7 MB (10k → 100k → 1M)**, flat regardless of image payload — in **2.6s → 3.7s → 8.3s**. Inline Delta's `ALTER` + `UPDATE` drags all the image bytes through a full row-group rewrite: **688 MB → 6,867 MB → 68,648 MB** and **3.6s → 13.3s → 84.3s** (so Lance is **10.2× faster** at 1M *and* writes ~25,000× fewer bytes). Path-ref's backfill is cheap in bytes (metadata only, ~190 MB at 100k) but only because the images never lived in the table — the cost you deferred is paid back on every read.
 - **Both Lance operations are distributed on Ray**, matching Delta's distributed Spark write/`UPDATE` — so the wall-clock wins are a fair fight, not Lance-parallel vs Delta-serial.
 
 **Write (ingest)**
 
 | Write (ingest) | Lance | Delta (inline) | Delta (path-ref) |
 |--|-------|----------------|------------------|
-| Write time (10k → 100k → 1M) | **3.4s → 5.1s → 26.6s** | 14.9s → 13.4s → **242.5s** (funnels via Spark) | 48.7s → 266.8s (not run at 1M) |
-| Files written ≈ object-store PUTs (10k → 100k → 1M) | **16 → 64 → 600** (one per fragment) | 16 → 64 → 600 (one per Parquet file) | **10,001 → 100,001** (one per image + table; not run at 1M) |
+| Write time (10k → 100k → 1M) | **3.8s → 5.1s → 23.5s** | 18.2s → 18.2s → **299.0s** (funnels via Spark) | 91.7s → 308.9s (not run at 1M) |
+| Files written ≈ object-store PUTs (10k → 100k → 1M) | **16 → 64 → 600** (one per fragment) | 16 → 65 → 600 (one per Parquet file) | **10,001 → 100,001** (one per image + table; not run at 1M) |
 
 **Backfill (schema evolution — add + populate a derived column)**
 
 | Backfill | Lance | Delta (inline) | Delta (path-ref) |
 |--|-------|----------------|------------------|
-| Time (10k → 100k → 1M) | **2.4s → 2.7s → 8.8s** | 3.0s → 9.0s → 46.9s | 8.7s → 3.2s (metadata only, noise-dominated) |
-| Bytes written (10k → 100k → 1M) | **0.1 → 0.5 → 3.8 MB** (new col only) | 688 → 6,867 → **68,648 MB** (drags image bytes) | ~19 → 190 MB (metadata only) |
-| Files rewritten (10k → 100k → 1M) | one new col file per fragment (16 → 64 → 600) — data files untouched | 16 → 64 → **605** (whole row groups, image bytes and all) | 2 → 21 (metadata-only Parquet; not run at 1M) |
+| Time (10k → 100k → 1M) | **2.6s → 3.7s → 8.3s** | 3.6s → 13.3s → 84.3s | 10.0s → 4.5s (metadata only, noise-dominated) |
+| Bytes written (10k → 100k → 1M) | **0.1 → 0.5 → 2.7 MB** (new col only) | 688 → 6,867 → **68,648 MB** (drags image bytes) | ~19 → 190 MB (metadata only) |
+| Files rewritten (10k → 100k → 1M) | one new col file per fragment (16 → 64 → 600) — data files untouched | 16 → 65 → **600** (whole row groups, image bytes and all) | 2 → 21 (metadata-only Parquet; not run at 1M) |
 
 *Backfill = adding a **derived** column (here the L2 norm of the embedding) and populating it across all existing rows. The `ALTER TABLE ADD COLUMN` step is metadata-only and free on both formats — only **filling** the rows triggers a rewrite, so the numbers above are that fill. Delta must rewrite whole row groups (dragging the image bytes along); Lance's distributed `merge_columns` writes only the new column file per fragment and leaves the data files untouched.*
 
@@ -61,14 +61,14 @@ Three points, all favoring Lance so strongly the trend line is the story — and
 
 | Scaling & capabilities | Lance | Delta (inline) | Delta (path-ref) |
 |--|-------|----------------|------------------|
-| Scale behavior | distributed fragments, flat | **Spark funnel — 9.1× behind at 1M**; ~2.1GB per-cell Parquet cap | file-count / PUT storm |
+| Scale behavior | distributed fragments, flat | **Spark funnel — 12.7× behind at 1M**; ~2.1GB per-cell Parquet cap | file-count / PUT storm |
 | Random point-access reads (by-ID row fetch) | **O(1)** — byte-offset addressed, served from the same store | full row-group scan (~128 MB per 1,280-row group) | separate Volumes GET per row |
 | Max inline blob (per cell) | **No limit** — byte-offset addressed | **~2 GB** hard Parquet cap (32-bit length prefix) | n/a — bytes live in Volume files |
 | Dataset versioning | first-class fragment versions | Delta time-travel | Delta time-travel |
 
 *The last three rows are **capability gaps, not stopwatch wins** — the streaming benchmark doesn't exercise them. Random point-access (by-ID fetches for data curation, error analysis, active-learning selection, and vector/ANN retrieval co-located with the image bytes) is served directly from the single versioned Lance store; Delta needs a separate vector DB kept in sync. The ~2 GB per-cell cap only bites on heavier payloads — full-res video, whole-slide pathology, volumetric scans — not the ~150 KB JPEGs here.*
 
-**Takeaway:** for the streaming training *read* path, inline Delta is a genuine tie with Lance at all three tiers — streaming doesn't reward the layout, and we don't pretend otherwise (inline even edges Lance on TTFB at scale). Lance's real, durable value is on the **write and data-management side**, and node-matching only sharpened it: flat-scaling ingest (26.6s vs 242.5s = **9.1× at 1M**) that inline Delta's Spark funnel can't match once the data saturates Spark, and feature backfill that now wins on **both** bytes (3.8 MB vs 68.6 GB at 1M) **and** wall-clock (8.8s vs 46.9s = 5.3×), plus large-blob support past Parquet's per-cell ceiling. Path-ref Delta is the read-side loser on every tier, and the gap only widens with scale.
+**Takeaway:** for the streaming training *read* path, inline Delta is a genuine tie with Lance at all three tiers — streaming doesn't reward the layout, and we don't pretend otherwise (inline even edges Lance on TTFB at scale). Lance's real, durable value is on the **write and data-management side**, and node-matching only sharpened it: flat-scaling ingest (23.5s vs 299.0s = **12.7× at 1M**) that inline Delta's Spark funnel can't match once the data saturates Spark, and feature backfill that now wins on **both** bytes (2.7 MB vs 68.6 GB at 1M) **and** wall-clock (8.3s vs 84.3s = 10.2×), plus large-blob support past Parquet's per-cell ceiling. Path-ref Delta is the read-side loser on every tier, and the gap only widens with scale.
 
 ---
 

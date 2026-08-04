@@ -3,25 +3,25 @@
   "n_rows": 10000,
   "common": {
     "path_label": "delta_pathref",
-    "write_total_s": 48.725,
-    "target_write_s": 11.044,
+    "write_total_s": 91.683,
+    "target_write_s": 51.608,
     "n_output_files": 10001,
-    "on_disk_bytes": 687707501,
-    "etl_backfill_s": 8.729,
-    "etl_bytes_written": 19050691,
+    "on_disk_bytes": 687708056,
+    "etl_backfill_s": 9.977,
+    "etl_bytes_written": 19051243,
     "roundtrip_ok": null
   },
   "raw": {
     "raw_image_gb": 0.6687,
-    "files_write_s": 37.681,
-    "delta_write_s": 11.044,
-    "delta_total_write_s": 48.725,
+    "files_write_s": 40.076,
+    "delta_write_s": 51.608,
+    "delta_total_write_s": 91.683,
     "img_files": 10000,
     "img_bytes": 668689654,
-    "delta_total_bytes": 687707501,
-    "delta_backfill_s": 8.729,
-    "delta_bytes_rewritten": 19050691,
+    "delta_total_bytes": 687708056,
+    "delta_backfill_s": 9.977,
+    "delta_bytes_rewritten": 19051243,
     "delta_files_rewritten": 2,
-    "delta_meta_after": 19050691
+    "delta_meta_after": 19051243
   }
 }

@@ -3,21 +3,21 @@
   "n_rows": 10000,
   "common": {
     "path_label": "delta_inline",
-    "write_total_s": 14.872,
-    "target_write_s": 14.872,
+    "write_total_s": 18.218,
+    "target_write_s": 18.218,
     "n_output_files": 16,
-    "on_disk_bytes": 687767415,
-    "etl_backfill_s": 2.96,
-    "etl_bytes_written": 687805281,
+    "on_disk_bytes": 687761472,
+    "etl_backfill_s": 3.574,
+    "etl_bytes_written": 687799341,
     "roundtrip_ok": null
   },
   "raw": {
     "raw_image_gb": 0.6687,
-    "inline_write_s": 14.872,
-    "inline_on_disk_bytes": 687767415,
+    "inline_write_s": 18.218,
+    "inline_on_disk_bytes": 687761472,
     "inline_n_files": 16,
-    "inline_backfill_s": 2.96,
-    "inline_bytes_rewritten": 687805281,
+    "inline_backfill_s": 3.574,
+    "inline_bytes_rewritten": 687799341,
     "inline_files_rewritten": 16
   }
 }

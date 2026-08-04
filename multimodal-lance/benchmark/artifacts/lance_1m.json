@@ -3,21 +3,21 @@
   "n_rows": 1000000,
   "common": {
     "path_label": "lance_native",
-    "write_total_s": 26.565,
-    "target_write_s": 26.565,
+    "write_total_s": 23.462,
+    "target_write_s": 23.462,
     "n_output_files": 600,
-    "on_disk_bytes": 137832100743,
-    "etl_backfill_s": 8.802,
-    "etl_bytes_written": 3751420,
+    "on_disk_bytes": 206750356915,
+    "etl_backfill_s": 8.305,
+    "etl_bytes_written": 2749655,
     "roundtrip_ok": true
   },
   "raw": {
     "raw_image_gb": 66.7397,
-    "lance_write_s": 26.565,
-    "lc_bytes": 137832100743,
+    "lance_write_s": 23.462,
+    "lc_bytes": 206750356915,
     "n_frag": 600,
-    "lance_backfill_s": 8.802,
-    "lc_bytes_after": 55648155350,
+    "lance_backfill_s": 8.305,
+    "lc_bytes_after": 57474267396,
     "roundtrip_ok": true
   }
 }
