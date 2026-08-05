@@ -5,18 +5,22 @@
 # ///
 # DBTITLE 1,04 — Run Benchmarks in Parallel
 # MAGIC %md
-# MAGIC # 04 — Run Benchmarks in Parallel
+# MAGIC # 03 — Run Benchmarks in Parallel
 # MAGIC
-# MAGIC Submit **6 one-time runs** (via `jobs.submit`) concurrently, each on its own 14-worker classic cluster (m4.4xlarge, 16 CPUs/node). Polls until all complete and reports results.
+# MAGIC Submit **8 one-time runs** (via `jobs.submit`) concurrently, each on its own 14-worker classic cluster (m4.4xlarge, 16 CPUs/node). Polls until all complete and reports results.
+# MAGIC
+# MAGIC Each delta mode gets its own isolated cluster to avoid Spark caching artefacts (shared DataFrame between modes inflates inline timings).
 # MAGIC
 # MAGIC | # | Notebook | size | delta_write_mode |
 # MAGIC |---|----------|------|------------------|
-# MAGIC | 1 | 01a_delta_native | 10k | both |
-# MAGIC | 2 | 01b_lance_native | 10k | — |
-# MAGIC | 3 | 01a_delta_native | 100k | both |
-# MAGIC | 4 | 01b_lance_native | 100k | — |
-# MAGIC | 5 | 01a_delta_native | 1m | inline |
-# MAGIC | 6 | 01b_lance_native | 1m | — |
+# MAGIC | 1 | 01a_delta_native | 10k | inline |
+# MAGIC | 2 | 01a_delta_native | 10k | pathref |
+# MAGIC | 3 | 01b_lance_native | 10k | — |
+# MAGIC | 4 | 01a_delta_native | 100k | inline |
+# MAGIC | 5 | 01a_delta_native | 100k | pathref |
+# MAGIC | 6 | 01b_lance_native | 100k | — |
+# MAGIC | 7 | 01a_delta_native | 1m | inline |
+# MAGIC | 8 | 01b_lance_native | 1m | — |
 
 # COMMAND ----------
 
@@ -62,22 +66,24 @@ COMMON_PARAMS = {
     "embedding_dim": "512",
 }
 
-# ── 6 run definitions ──
+# ── 8 run definitions (each mode isolated to avoid Spark caching artefacts) ──
 RUNS = [
-    {"name": "01a_delta_10k_both",   "notebook": NB_01A, "params": {"size": "10k",  "delta_write_mode": "both"}},
-    {"name": "01b_lance_10k",        "notebook": NB_01B, "params": {"size": "10k"}},
-    {"name": "01a_delta_100k_both",  "notebook": NB_01A, "params": {"size": "100k", "delta_write_mode": "both"}},
-    {"name": "01b_lance_100k",       "notebook": NB_01B, "params": {"size": "100k"}},
-    {"name": "01a_delta_1m_inline",  "notebook": NB_01A, "params": {"size": "1m",   "delta_write_mode": "inline"}},
-    {"name": "01b_lance_1m",         "notebook": NB_01B, "params": {"size": "1m"}},
+    {"name": "01a_delta_10k_inline",  "notebook": NB_01A, "params": {"size": "10k",  "delta_write_mode": "inline"}},
+    {"name": "01a_delta_10k_pathref", "notebook": NB_01A, "params": {"size": "10k",  "delta_write_mode": "pathref"}},
+    {"name": "01b_lance_10k",         "notebook": NB_01B, "params": {"size": "10k"}},
+    {"name": "01a_delta_100k_inline", "notebook": NB_01A, "params": {"size": "100k", "delta_write_mode": "inline"}},
+    {"name": "01a_delta_100k_pathref","notebook": NB_01A, "params": {"size": "100k", "delta_write_mode": "pathref"}},
+    {"name": "01b_lance_100k",        "notebook": NB_01B, "params": {"size": "100k"}},
+    {"name": "01a_delta_1m_inline",   "notebook": NB_01A, "params": {"size": "1m",   "delta_write_mode": "inline"}},
+    {"name": "01b_lance_1m",          "notebook": NB_01B, "params": {"size": "1m"}},
 ]
 
-print(f"Submitting {len(RUNS)} runs, each on a fresh 14-worker m4.4xlarge cluster")
+print(f"Submitting {len(RUNS)} runs, each on its own fresh 14-worker m4.4xlarge cluster")
 
 # COMMAND ----------
 
 # DBTITLE 1,Submit all 6 runs in parallel
-# Submit all runs — each gets its own cluster
+# Submit all 8 runs — each gets its own isolated cluster
 submitted = []
 for run_def in RUNS:
     params = {**COMMON_PARAMS, **run_def["params"]}
