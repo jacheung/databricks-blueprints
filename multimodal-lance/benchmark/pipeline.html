@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Benchmark pipeline — Delta vs Lance</title>
+<style>
+  :root {
+    --surface: #fcfcfb;
+    --ink: #1a1a19;
+    --ink-2: #55534e;
+    --muted: #8a8780;
+    --grid: #e6e4df;
+    --lance: #1E6FB4;
+    --delta: #FF3621;
+    --pathref: #B84A9E;
+    --lance-bg: #eaf3fa;
+    --delta-bg: #fdece9;
+    --pathref-bg: #f9ebf5;
+    --neutral-bg: #f2f0ec;
+  }
+  body[data-color-mode="dark"] {
+    --surface: #1a1a19;
+    --ink: #f3f1ec;
+    --ink-2: #b8b5ad;
+    --muted: #7d7a73;
+    --grid: #333230;
+    --lance: #3E90D6;
+    --delta: #F5533E;
+    --pathref: #C55EAC;
+    --lance-bg: #16232e;
+    --delta-bg: #2c1a17;
+    --pathref-bg: #281826;
+    --neutral-bg: #242320;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 32px;
+    background: var(--surface); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  .head { margin-bottom: 22px; }
+  h1 { font-size: 19px; font-weight: 650; margin: 0 0 4px; }
+  .sub { color: var(--ink-2); font-size: 13px; margin: 0; max-width: 900px; }
+
+  .col-heads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 22px 0 10px; }
+  .col-head { text-align: center; font-size: 13.5px; font-weight: 650; }
+  .col-head .nb { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+    font-weight: 500; color: var(--muted); display: block; margin-top: 2px; }
+  .col-head .tag { font-size: 10.5px; font-weight: 600; color: var(--muted); display: block; margin-top: 3px; }
+  .col-head.delta   { color: var(--delta); }
+  .col-head.pathref { color: var(--pathref); }
+  .col-head.lance   { color: var(--lance); }
+
+  .node {
+    border-radius: 12px; padding: 14px 16px; border: 1.5px solid var(--grid);
+    background: var(--neutral-bg);
+  }
+  .node .t { font-size: 14px; font-weight: 650; display: flex; align-items: center; }
+  .node .d { font-size: 11.5px; color: var(--ink-2); margin-top: 3px; line-height: 1.45; }
+  .node .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; }
+
+  .shared { margin: 0 auto; }
+  .stage-num { display: inline-flex; align-items: center; justify-content: center;
+    width: 19px; height: 19px; border-radius: 50%; background: var(--muted); color: var(--surface);
+    font-size: 11px; font-weight: 700; margin-right: 8px; flex: 0 0 auto; }
+
+  .branch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; align-items: start; }
+  .lane { display: flex; flex-direction: column; }
+  .node.delta   { background: var(--delta-bg);   border-color: var(--delta); }
+  .node.pathref { background: var(--pathref-bg); border-color: var(--pathref); }
+  .node.lance   { background: var(--lance-bg);   border-color: var(--lance); }
+  .node.delta .t   { color: var(--delta); }
+  .node.pathref .t { color: var(--pathref); }
+  .node.lance .t   { color: var(--lance); }
+  .node.delta .code   { color: var(--delta); }
+  .node.pathref .code { color: var(--pathref); }
+  .node.lance .code   { color: var(--lance); }
+
+  .arrow { height: 24px; display: flex; align-items: center; justify-content: center; }
+  .arrow svg { display: block; }
+  .arrow-line { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .arrow-head { fill: var(--muted); }
+</style>
+</head>
+<body data-color-mode="light">
+<div class="wrap">
+  <div class="head">
+    <h1>Benchmark pipeline — Delta vs Lance, one engine</h1>
+    <p class="sub">One deterministic Spark source, three storage formats. All data engineering — generate, write, backfill — runs on <b>pure Spark</b>, so the only variable is the terminal format. <span class="code" style="font-size:11px;">02_run_benchmarks</span> submits each (format × size) as a parallel job on its <b>own fresh 8-worker Spark cluster</b> — so no route reuses another's cache. Fixed seed &amp; cluster.</p>
+  </div>
+
+  <!-- Shared top: Setup + Generate -->
+  <div class="shared" style="max-width:560px;">
+    <div class="node">
+      <div class="t"><span class="stage-num">1</span>Setup</div>
+      <div class="d">Fixed RNG seed + one Spark cluster config, held constant across all three formats.</div>
+    </div>
+    <div class="arrow"><svg width="14" height="24"><path class="arrow-line" d="M7 0 V17"/><path class="arrow-head" d="M7 24 l-4 -7 h8 z"/></svg></div>
+    <div class="node">
+      <div class="t"><span class="stage-num">2</span>Generate on Spark <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:500;color:var(--muted);margin-left:8px;">01_create_datasets</span></div>
+      <div class="d">Spark <span class="code">range(N).mapInArrow(gen)</span>, seeded by <span class="code">(SEED, id)</span> — the Arrow-batched analog of a vectorized map. Each run regenerates the byte-identical source.</div>
+    </div>
+  </div>
+
+  <!-- Split arrow into three lanes -->
+  <div class="arrow" style="height:32px;"><svg width="800" height="32" viewBox="0 0 800 32">
+    <path class="arrow-line" d="M400 0 V8 M133 8 H667 M133 8 V24 M400 8 V24 M667 8 V24"/>
+    <path class="arrow-head" d="M133 32 l-4 -7 h8 z"/>
+    <path class="arrow-head" d="M400 32 l-4 -7 h8 z"/>
+    <path class="arrow-head" d="M667 32 l-4 -7 h8 z"/>
+  </svg></div>
+
+  <div class="col-heads">
+    <div class="col-head delta">Delta — inline<span class="nb">01 · format=delta_inline</span><span class="tag">anti-pattern, measured</span></div>
+    <div class="col-head pathref">Delta — path-ref<span class="nb">01 · format=delta_pathref</span><span class="tag">standard pattern</span></div>
+    <div class="col-head lance">Lance<span class="nb">01 · format=lance</span><span class="tag">purpose-built for blobs</span></div>
+  </div>
+
+  <div class="branch">
+    <!-- DELTA INLINE lane -->
+    <div class="lane">
+      <div class="node delta">
+        <div class="t"><span class="stage-num" style="background:var(--delta)">3</span>Spark write</div>
+        <div class="d"><span class="code">df.write.saveAsTable</span> — JPEG bytes stored <b>inline in a binary column</b>, no files. Whole dataset funnels through the Spark write path (~2.1 GB per-cell cap).</div>
+      </div>
+      <div class="arrow"><svg width="14" height="24"><path class="arrow-line" d="M7 0 V17"/><path class="arrow-head" d="M7 24 l-4 -7 h8 z"/></svg></div>
+      <div class="node delta">
+        <div class="t"><span class="stage-num" style="background:var(--delta)">4</span>Spark backfill</div>
+        <div class="d"><span class="code">ALTER … ADD COLUMN</span> + <span class="code">UPDATE</span> — every rewritten row group <b>drags the inline image bytes along</b>: inflated bytes written.</div>
+      </div>
+    </div>
+
+    <!-- DELTA PATH-REF lane -->
+    <div class="lane">
+      <div class="node pathref">
+        <div class="t"><span class="stage-num" style="background:var(--pathref)">3</span>Spark write</div>
+        <div class="d"><span class="code">mapInArrow</span> writes JPEG files → Volume, then <span class="code">saveAsTable</span> with an <span class="code">image_path</span> column. <b>~N object-store PUTs</b> (one per image).</div>
+      </div>
+      <div class="arrow"><svg width="14" height="24"><path class="arrow-line" d="M7 0 V17"/><path class="arrow-head" d="M7 24 l-4 -7 h8 z"/></svg></div>
+      <div class="node pathref">
+        <div class="t"><span class="stage-num" style="background:var(--pathref)">4</span>Spark backfill</div>
+        <div class="d"><span class="code">ALTER … ADD COLUMN</span> + <span class="code">UPDATE</span> — rewrites the metadata Parquet only; image bytes stay in the referenced files.</div>
+      </div>
+    </div>
+
+    <!-- LANCE lane -->
+    <div class="lane">
+      <div class="node lance">
+        <div class="t"><span class="stage-num" style="background:var(--lance)">3</span>Spark write</div>
+        <div class="d"><span class="code">df.writeTo(…)</span> via the Lance catalog, <b>blob-encoded bytes inline</b>. <b>~PUTs per fragment</b> (dozens), no files.</div>
+      </div>
+      <div class="arrow"><svg width="14" height="24"><path class="arrow-line" d="M7 0 V17"/><path class="arrow-head" d="M7 24 l-4 -7 h8 z"/></svg></div>
+      <div class="node lance">
+        <div class="t"><span class="stage-num" style="background:var(--lance)">4</span>Spark backfill</div>
+        <div class="d"><span class="code">ALTER … ADD COLUMNS FROM</span> — <b>writes only the new column file</b> per fragment, no rewrite of existing data.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Converge to Compare -->
+  <div class="arrow" style="height:32px;"><svg width="800" height="32" viewBox="0 0 800 32">
+    <path class="arrow-line" d="M133 0 V16 M667 0 V16 M133 16 H667 M400 0 V16 M400 16 V24"/>
+    <path class="arrow-head" d="M400 32 l-4 -7 h8 z"/>
+  </svg></div>
+
+  <div class="shared" style="max-width:560px;">
+    <div class="node">
+      <div class="t"><span class="stage-num">5</span>Train — Ray <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:500;color:var(--muted);margin-left:8px;">03_training_benchmark</span></div>
+      <div class="d">Ray Train DDP over streaming Ray Data (block shuffle, decode+resize fused into read) — the natural home for distributed training. Reads each format back; measures samples/sec &amp; TTFB.</div>
+    </div>
+    <div class="arrow"><svg width="14" height="24"><path class="arrow-line" d="M7 0 V17"/><path class="arrow-head" d="M7 24 l-4 -7 h8 z"/></svg></div>
+    <div class="node">
+      <div class="t"><span class="stage-num">6</span>Compare metrics <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:500;color:var(--muted);margin-left:8px;">04_compile_results</span></div>
+      <div class="d">PUT count · write &amp; backfill wall-clock + bytes · training throughput · GPU utilization.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
