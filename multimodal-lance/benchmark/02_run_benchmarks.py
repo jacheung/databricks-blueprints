@@ -36,7 +36,7 @@ from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.jobs import SubmitTask, NotebookTask, Source
 from databricks.sdk.service.compute import (
     ClusterSpec, DataSecurityMode, AwsAttributes,
-    AwsAvailability, EbsVolumeType, Library, MavenLibrary,
+    AwsAvailability, EbsVolumeType, Library,
 )
 import time
 
@@ -47,24 +47,28 @@ BASE = "/Workspace/Users/jon.cheung@databricks.com/databricks-bookshelf/multimod
 NB_01 = f"{BASE}/01_create_datasets"
 
 # ── Single cluster spec: 8 workers × m4.4xlarge (16 CPUs), Single-User UC ──
-# DBR 16.4 LTS (Spark 3.5 / Scala 2.12): required so the lance-spark-bundle JAR loads —
-# it is NOT compatible with DBR 17.x (Spark 4 / Scala 2.13). Delta runs fine on 16.4, so
-# one spec serves all three formats. The Lance JAR + catalog config below are inert for
-# the Delta runs (they only kick in when format=lance), so a single spec is safe for the grid.
-LANCE_JAR = "org.lance:lance-spark-bundle-3.5_2.12:0.0.6"   # pin to the version you allowlisted
+# Latest DBR with a matching lance-spark-bundle build, per docs.databricks.com/aws/en/release-notes/runtime/
+# and Maven Central (repo1.maven.org/maven2/org/lance/lance-spark-bundle-*/maven-metadata.xml):
+#   DBR 16.4 LTS -> Spark 3.5.2 / Scala 2.12 -> lance-spark-bundle-3.5_2.12
+#   DBR 17.3 LTS -> Spark 4.0.0 / Scala 2.13 -> lance-spark-bundle-4.0_2.13
+#   DBR 18 LTS   -> Spark 4.1.0 / Scala 2.13 -> lance-spark-bundle-4.1_2.13   <- pinned below (latest LTS)
+#   DBR 19       -> Spark 4.2.0 / Scala 2.13 -> lance-spark-bundle-4.2_2.13   (newest overall, not LTS yet)
+# All lance-spark-bundle-* artifacts above are published at the same latest version, 0.7.1 (as of
+# 2026-07-30) — 0.0.6 (previously pinned) was never released and would fail dependency resolution.
+# Picked 18 LTS over 19 for a benchmark: LTS gets a 3-year support window vs. 19's rolling channel.
+# The JAR must live in a Volume and be on the UC allowlist (Maven coords aren't supported).
+# Run cell 3 once to download and allowlist it.
+LANCE_JAR_PATH = "/Volumes/main/jon_cheung/lance_benchmark/jars/lance-spark-bundle-4.1_2.13-0.7.1.jar"
 
+# ── Single cluster spec (shared by all runs) ──
+# No spark_conf catalog settings needed: 01_create_datasets uses the DataSource API
+# (format("lance")) which only needs the JAR on the classpath — no UC catalog required.
+# UC on SINGLE_USER clusters intercepts catalog lookups, making spark.sql.catalog.* invisible.
 CLUSTER_SPEC = ClusterSpec(
-    spark_version="16.4.x-scala2.12",
+    spark_version="18.x-scala2.13",
     node_type_id="m4.4xlarge",
     num_workers=8,
     data_security_mode=DataSecurityMode.SINGLE_USER,
-    # Lance dir-namespace catalog rooted at the Volume so the dataset lands at
-    # {volume}/synthetic_lance_{size} — exactly where 03 reads it via read_lance.
-    spark_conf={
-        "spark.sql.catalog.lance": "org.lance.spark.LanceNamespaceSparkCatalog",
-        "spark.sql.catalog.lance.impl": "dir",
-        "spark.sql.catalog.lance.root": "/Volumes/main/ml_benchmark/lance_benchmark",
-    },
     aws_attributes=AwsAttributes(
         availability=AwsAvailability.SPOT_WITH_FALLBACK,
         first_on_demand=1,
@@ -76,36 +80,92 @@ CLUSTER_SPEC = ClusterSpec(
     ),
 )
 
-# lance-spark-bundle installed as a cluster library (must also be UC-allowlisted).
-CLUSTER_LIBRARIES = [Library(maven=MavenLibrary(coordinates=LANCE_JAR))]
+# No cluster libraries needed: lance writes use pylance (pip-installed in 01_create_datasets),
+# not the Spark DataSource connector. Both the Spark catalog and DataSource connector fail on
+# UC SINGLE_USER clusters, so we bypass them entirely.
 
 # ── Common base_parameters shared across all runs ──
 COMMON_PARAMS = {
     "catalog": "main",
-    "schema": "ml_benchmark",
+    "schema": "jon_cheung",   # UC schema names can't contain "." (was failing CreateVolume with InvalidParameterValue)
     "volume": "lance_benchmark",
     "seed": "42",
     "embedding_dim": "512",
 }
 
 # ── Run grid: (format × size) — one 01_create_datasets invocation each ──
+# Each run specifies which cluster spec to use (lance needs the init script).
 RUNS = [
-    {"name": "lance_10k",          "params": {"format": "lance",         "size": "10k"}},
-    {"name": "lance_100k",         "params": {"format": "lance",         "size": "100k"}},
-    {"name": "lance_1m",           "params": {"format": "lance",         "size": "1m"}},
-    {"name": "delta_inline_10k",   "params": {"format": "delta_inline",  "size": "10k"}},
-    {"name": "delta_inline_100k",  "params": {"format": "delta_inline",  "size": "100k"}},
-    {"name": "delta_inline_1m",    "params": {"format": "delta_inline",  "size": "1m"}},
-    {"name": "delta_pathref_10k",  "params": {"format": "delta_pathref", "size": "10k"}},
-    {"name": "delta_pathref_100k", "params": {"format": "delta_pathref", "size": "100k"}},
+    {"name": "lance_10k",          "params": {"format": "lance",         "size": "10k"},  "cluster": "lance"},
+    {"name": "lance_100k",         "params": {"format": "lance",         "size": "100k"}, "cluster": "lance"},
+    {"name": "lance_1m",           "params": {"format": "lance",         "size": "1m"},   "cluster": "lance"},
+    {"name": "delta_inline_10k",   "params": {"format": "delta_inline",  "size": "10k"},  "cluster": "delta"},
+    {"name": "delta_inline_100k",  "params": {"format": "delta_inline",  "size": "100k"}, "cluster": "delta"},
+    {"name": "delta_inline_1m",    "params": {"format": "delta_inline",  "size": "1m"},   "cluster": "delta"},
+    {"name": "delta_pathref_10k",  "params": {"format": "delta_pathref", "size": "10k"},  "cluster": "delta"},
+    {"name": "delta_pathref_100k", "params": {"format": "delta_pathref", "size": "100k"}, "cluster": "delta"},
 ]
 
-print(f"Submitting {len(RUNS)} runs, each on its own fresh 8-worker m4.4xlarge cluster (DBR 16.4 LTS)")
+print(f"Submitting {len(RUNS)} runs, each on its own fresh 8-worker m4.4xlarge cluster (DBR 18 LTS)")
+
+# COMMAND ----------
+
+# DBTITLE 1,Fix: Add Lance JAR to UC allowlist (run once, requires metastore admin)
+# ─── ONE-TIME FIX: Download Lance JAR to a Volume and allowlist it ───
+# The UC JAR allowlist only accepts /Volumes/ paths (or s3/abfss/gs URIs),
+# NOT Maven coordinates. So we must:
+#   1. Download the JAR into a Volume
+#   2. Add that Volume path to the allowlist
+# Requires metastore admin for step 2.
+
+import urllib.request, os
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.catalog import ArtifactType, ArtifactMatcher, MatchType
+
+w = WorkspaceClient()
+
+# ── Step 1: Download the lance-spark-bundle JAR to a UC Volume ──
+JAR_NAME = "lance-spark-bundle-4.1_2.13-0.7.1.jar"
+MAVEN_URL = f"https://repo1.maven.org/maven2/org/lance/lance-spark-bundle-4.1_2.13/0.7.1/{JAR_NAME}"
+VOLUME_JAR_DIR = "/Volumes/main/jon_cheung/lance_benchmark/jars"
+JAR_PATH = f"{VOLUME_JAR_DIR}/{JAR_NAME}"
+
+os.makedirs(VOLUME_JAR_DIR, exist_ok=True)
+
+if os.path.exists(JAR_PATH):
+    print(f"✓ JAR already exists: {JAR_PATH}")
+else:
+    print(f"Downloading {JAR_NAME} from Maven Central...")
+    urllib.request.urlretrieve(MAVEN_URL, JAR_PATH)
+    size_mb = os.path.getsize(JAR_PATH) / (1024 * 1024)
+    print(f"✓ Downloaded: {JAR_PATH} ({size_mb:.1f} MB)")
+
+# ── Step 2: Add the Volume path to the UC JAR allowlist ──
+current = w.artifact_allowlists.get(artifact_type=ArtifactType.LIBRARY_JAR)
+existing = list(current.artifact_matchers) if current.artifact_matchers else []
+
+allowlist_path = f"{VOLUME_JAR_DIR}/"
+if not any("lance" in (m.artifact or "").lower() for m in existing):
+    updated = existing + [
+        ArtifactMatcher(
+            artifact=allowlist_path,
+            match_type=MatchType.PREFIX_MATCH,
+        )
+    ]
+    w.artifact_allowlists.update(
+        artifact_type=ArtifactType.LIBRARY_JAR,
+        artifact_matchers=updated,
+    )
+    print(f"✓ Added '{allowlist_path}' to UC JAR allowlist ({len(updated)} entries total)")
+else:
+    print("✓ Lance Volume path already in allowlist")
+
+print(f"\n── Now update CLUSTER_LIBRARIES to reference: {JAR_PATH}")
 
 # COMMAND ----------
 
 # DBTITLE 1,Submit all runs in parallel
-# Submit every run — each gets its own isolated cluster with the Lance JAR + catalog config.
+# Submit every run — same cluster spec, lance runs get the JAR library.
 submitted = []
 for run_def in RUNS:
     params = {**COMMON_PARAMS, **run_def["params"]}
@@ -115,7 +175,6 @@ for run_def in RUNS:
             SubmitTask(
                 task_key="create_dataset",
                 new_cluster=CLUSTER_SPEC,
-                libraries=CLUSTER_LIBRARIES,
                 notebook_task=NotebookTask(
                     notebook_path=NB_01,
                     source=Source.WORKSPACE,
@@ -125,7 +184,7 @@ for run_def in RUNS:
         ],
     )
     submitted.append({"name": run_def["name"], "run_id": result.run_id})
-    print(f"  Submitted: {run_def['name']} → run_id={result.run_id}")
+    print(f"  Submitted: {run_def['name']} ({run_def['cluster']}) → run_id={result.run_id}")
 
 print(f"\n✓ All {len(submitted)} runs submitted")
 
