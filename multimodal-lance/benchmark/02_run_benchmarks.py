@@ -14,18 +14,21 @@
 # MAGIC
 # MAGIC **This is a data-creation step — run it before `03_training_benchmark`**, which reads the
 # MAGIC datasets these runs produce (`synthetic_lance_{size}`, `synthetic_delta_{size}`,
-# MAGIC `synthetic_delta_inline_{size}`).
+# MAGIC `synthetic_delta_inline_{size}`, `synthetic_delta_inline_file_{size}`).
 # MAGIC
 # MAGIC | # | format | size |
 # MAGIC |---|--------|------|
-# MAGIC | 1 | lance          | 10k  |
-# MAGIC | 2 | lance          | 100k |
-# MAGIC | 3 | lance          | 1m   |
-# MAGIC | 4 | delta_inline   | 10k  |
-# MAGIC | 5 | delta_inline   | 100k |
-# MAGIC | 6 | delta_inline   | 1m   |
-# MAGIC | 7 | delta_pathref  | 10k  |
-# MAGIC | 8 | delta_pathref  | 100k |
+# MAGIC | 1 | lance               | 10k  |
+# MAGIC | 2 | lance               | 100k |
+# MAGIC | 3 | lance               | 1m   |
+# MAGIC | 4 | delta_inline_binary | 10k  |
+# MAGIC | 5 | delta_inline_binary | 100k |
+# MAGIC | 6 | delta_inline_binary | 1m   |
+# MAGIC | 7 | delta_inline_file   | 10k  |
+# MAGIC | 8 | delta_inline_file   | 100k |
+# MAGIC | 9 | delta_inline_file   | 1m   |
+# MAGIC | 10 | delta_pathref      | 10k  |
+# MAGIC | 11 | delta_pathref      | 100k |
 # MAGIC
 # MAGIC path-ref is intentionally not carried to 1M (the per-image PUT storm is the clear loser by 100k).
 
@@ -96,14 +99,20 @@ COMMON_PARAMS = {
 # ── Run grid: (format × size) — one 01_create_datasets invocation each ──
 # Each run specifies which cluster spec to use (lance needs the init script).
 RUNS = [
-    {"name": "lance_10k",          "params": {"format": "lance",         "size": "10k"},  "cluster": "lance"},
-    {"name": "lance_100k",         "params": {"format": "lance",         "size": "100k"}, "cluster": "lance"},
-    {"name": "lance_1m",           "params": {"format": "lance",         "size": "1m"},   "cluster": "lance"},
-    {"name": "delta_inline_10k",   "params": {"format": "delta_inline",  "size": "10k"},  "cluster": "delta"},
-    {"name": "delta_inline_100k",  "params": {"format": "delta_inline",  "size": "100k"}, "cluster": "delta"},
-    {"name": "delta_inline_1m",    "params": {"format": "delta_inline",  "size": "1m"},   "cluster": "delta"},
-    {"name": "delta_pathref_10k",  "params": {"format": "delta_pathref", "size": "10k"},  "cluster": "delta"},
-    {"name": "delta_pathref_100k", "params": {"format": "delta_pathref", "size": "100k"}, "cluster": "delta"},
+    # All 4 formats × 10k
+    # {"name": "lance_10k",               "params": {"format": "lance",               "size": "10k"},  "cluster": "lance"},
+    # {"name": "delta_inline_binary_10k",  "params": {"format": "delta_inline_binary",  "size": "10k"},  "cluster": "delta"},
+    {"name": "delta_inline_file_10k",    "params": {"format": "delta_inline_file",    "size": "10k"},  "cluster": "delta"},
+    # {"name": "delta_pathref_10k",        "params": {"format": "delta_pathref",        "size": "10k"},  "cluster": "delta"},
+    # All 4 formats × 100k
+    # {"name": "lance_100k",              "params": {"format": "lance",               "size": "100k"}, "cluster": "lance"},
+    # {"name": "delta_inline_binary_100k", "params": {"format": "delta_inline_binary",  "size": "100k"}, "cluster": "delta"},
+    # {"name": "delta_inline_file_100k",   "params": {"format": "delta_inline_file",    "size": "100k"}, "cluster": "delta"},
+    # {"name": "delta_pathref_100k",       "params": {"format": "delta_pathref",        "size": "100k"}, "cluster": "delta"},
+    # delta_inline (both) + lance × 1M
+    # {"name": "lance_1m",                "params": {"format": "lance",               "size": "1m"},   "cluster": "lance"},
+    # {"name": "delta_inline_binary_1m",   "params": {"format": "delta_inline_binary",  "size": "1m"},   "cluster": "delta"},
+    # {"name": "delta_inline_file_1m",     "params": {"format": "delta_inline_file",    "size": "1m"},   "cluster": "delta"},
 ]
 
 print(f"Submitting {len(RUNS)} runs, each on its own fresh 8-worker m4.4xlarge cluster (DBR 18 LTS)")
