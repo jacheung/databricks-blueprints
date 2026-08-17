@@ -45,24 +45,11 @@ import time
 
 w = WorkspaceClient()
 
-# ╔══════════════════════════════════════════════════════════════════════╗
-# ║  CONFIGURATION — set these once; everything else is derived         ║
-# ╚══════════════════════════════════════════════════════════════════════╝
-CATALOG = "main"
-SCHEMA = "jon_cheung"          # UC schema names can't contain "."
-VOLUME = "lance_benchmark"
-SEED = "42"
-EMBEDDING_DIM = "512"
-
 # ── Notebook path ──
 BASE = "/Workspace/Users/jon.cheung@databricks.com/databricks-bookshelf/multimodal-lance/benchmark"
 NB_01 = f"{BASE}/01_create_datasets"
 
-# ── Derived paths ──
-VOLUME_PATH = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}"
-VOLUME_JAR_DIR = f"{VOLUME_PATH}/jars"
-
-# ── Lance JAR coordinates ──
+# ── Single cluster spec: 8 workers × m4.4xlarge (16 CPUs), Single-User UC ──
 # Latest DBR with a matching lance-spark-bundle build, per docs.databricks.com/aws/en/release-notes/runtime/
 # and Maven Central (repo1.maven.org/maven2/org/lance/lance-spark-bundle-*/maven-metadata.xml):
 #   DBR 16.4 LTS -> Spark 3.5.2 / Scala 2.12 -> lance-spark-bundle-3.5_2.12
@@ -74,8 +61,7 @@ VOLUME_JAR_DIR = f"{VOLUME_PATH}/jars"
 # Picked 18 LTS over 19 for a benchmark: LTS gets a 3-year support window vs. 19's rolling channel.
 # The JAR must live in a Volume and be on the UC allowlist (Maven coords aren't supported).
 # Run cell 3 once to download and allowlist it.
-LANCE_JAR_NAME = "lance-spark-bundle-4.1_2.13-0.7.1.jar"
-LANCE_JAR_PATH = f"{VOLUME_JAR_DIR}/{LANCE_JAR_NAME}"
+LANCE_JAR_PATH = "/Volumes/serverless_sandbox_k030aj_catalog/jon_cheung/lance_benchmark/jars/lance-spark-bundle-4.1_2.13-0.7.1.jar"
 
 # ── Single cluster spec (shared by all runs) ──
 # No spark_conf catalog settings needed: 01_create_datasets uses the DataSource API
@@ -101,13 +87,13 @@ CLUSTER_SPEC = ClusterSpec(
 # not the Spark DataSource connector. Both the Spark catalog and DataSource connector fail on
 # UC SINGLE_USER clusters, so we bypass them entirely.
 
-# ── Common base_parameters shared across all runs (derived from config above) ──
+# ── Common base_parameters shared across all runs ──
 COMMON_PARAMS = {
-    "catalog": CATALOG,
-    "schema": SCHEMA,
-    "volume": VOLUME,
-    "seed": SEED,
-    "embedding_dim": EMBEDDING_DIM,
+    "catalog": "serverless_sandbox_k030aj_catalog",
+    "schema": "jon_cheung",   # UC schema names can't contain "." (was failing CreateVolume with InvalidParameterValue)
+    "volume": "lance_benchmark",
+    "seed": "42",
+    "embedding_dim": "512",
 }
 
 # ── Run grid: (format × size) — one 01_create_datasets invocation each ──
@@ -142,20 +128,26 @@ print(f"Submitting {len(RUNS)} runs, each on its own fresh 8-worker m4.4xlarge c
 # Requires metastore admin for step 2.
 
 import urllib.request, os
+from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.catalog import ArtifactType, ArtifactMatcher, MatchType
 
-# Uses VOLUME_JAR_DIR, LANCE_JAR_NAME, LANCE_JAR_PATH from cell 2
-MAVEN_URL = f"https://repo1.maven.org/maven2/org/lance/lance-spark-bundle-4.1_2.13/0.7.1/{LANCE_JAR_NAME}"
+w = WorkspaceClient()
+
+# ── Step 1: Download the lance-spark-bundle JAR to a UC Volume ──
+JAR_NAME = "lance-spark-bundle-4.1_2.13-0.7.1.jar"
+MAVEN_URL = f"https://repo1.maven.org/maven2/org/lance/lance-spark-bundle-4.1_2.13/0.7.1/{JAR_NAME}"
+VOLUME_JAR_DIR = "/Volumes/serverless_sandbox_k030aj_catalog/jon_cheung/lance_benchmark/jars"
+JAR_PATH = f"{VOLUME_JAR_DIR}/{JAR_NAME}"
 
 os.makedirs(VOLUME_JAR_DIR, exist_ok=True)
 
-if os.path.exists(LANCE_JAR_PATH):
-    print(f"✓ JAR already exists: {LANCE_JAR_PATH}")
+if os.path.exists(JAR_PATH):
+    print(f"✓ JAR already exists: {JAR_PATH}")
 else:
-    print(f"Downloading {LANCE_JAR_NAME} from Maven Central...")
-    urllib.request.urlretrieve(MAVEN_URL, LANCE_JAR_PATH)
-    size_mb = os.path.getsize(LANCE_JAR_PATH) / (1024 * 1024)
-    print(f"✓ Downloaded: {LANCE_JAR_PATH} ({size_mb:.1f} MB)")
+    print(f"Downloading {JAR_NAME} from Maven Central...")
+    urllib.request.urlretrieve(MAVEN_URL, JAR_PATH)
+    size_mb = os.path.getsize(JAR_PATH) / (1024 * 1024)
+    print(f"✓ Downloaded: {JAR_PATH} ({size_mb:.1f} MB)")
 
 # ── Step 2: Add the Volume path to the UC JAR allowlist ──
 current = w.artifact_allowlists.get(artifact_type=ArtifactType.LIBRARY_JAR)
@@ -177,7 +169,7 @@ if not any("lance" in (m.artifact or "").lower() for m in existing):
 else:
     print("✓ Lance Volume path already in allowlist")
 
-print(f"\n✓ Lance JAR ready at: {LANCE_JAR_PATH}")
+print(f"\n── Now update CLUSTER_LIBRARIES to reference: {JAR_PATH}")
 
 # COMMAND ----------
 
