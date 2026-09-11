@@ -1,0 +1,17 @@
+resource: unity_gateway_service_policies
+model_service: main.jon_cheung.test_guardrails
+phase: ON_RESULT
+mode: ENFORCE
+policies:
+  - name: block_hallucination_output
+    builtin_policy: system.ai.block_hallucination
+excluded_policies:
+  - builtin_policy: system.ai.block_jailbreak
+    reason: Databricks supports jailbreak detection only at ON_CALL (input).
+  - builtin_policy: system.ai.block_unsafe_content
+    reason: This benchmark evaluates unsafe-content enforcement at ON_CALL (input).
+  - builtin_policy: system.ai.detect_sensitive_data
+    reason: This benchmark evaluates sensitive-data enforcement at ON_CALL (input).
+configuration_note: >-
+  Service-policy attachments are UI-only during the current beta. Attach these
+  output policies from Unity Gateway > Models > Policies after creating the service.

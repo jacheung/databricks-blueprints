@@ -1,0 +1,31 @@
+resources:
+  jobs:
+    service_policy_benchmark:
+      name: "[${bundle.target}] Service policy benchmark"
+      parameters:
+        - name: corpus_version_id
+          default: service-policy-v3
+      environments:
+        - environment_key: default
+          spec:
+            client: "4"
+            dependencies:
+              - PyYAML==6.0.2
+      tasks:
+        - task_key: validate_ui_configuration
+          environment_key: default
+          spark_python_task:
+            python_file: ../tests/validate_ui_configuration.py
+            source: WORKSPACE
+        - task_key: generate_and_run_corpus
+          depends_on:
+            - task_key: validate_ui_configuration
+          environment_key: default
+          spark_python_task:
+            python_file: ../tests/run_policy_benchmark.py
+            source: WORKSPACE
+            parameters:
+              - --benchmark-run-id
+              - "{{job.run_id}}"
+              - --corpus-version-id
+              - "{{job.parameters.corpus_version_id}}"

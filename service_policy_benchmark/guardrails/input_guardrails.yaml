@@ -1,0 +1,18 @@
+resource: unity_gateway_service_policies
+model_service: main.jon_cheung.test_guardrails
+phase: ON_CALL
+mode: ENFORCE
+policies:
+  - name: block_jailbreak_input
+    builtin_policy: system.ai.block_jailbreak
+    rank: 10
+  - name: block_unsafe_content_input
+    builtin_policy: system.ai.block_unsafe_content
+    rank: 20
+  - name: detect_sensitive_data_input
+    builtin_policy: system.ai.detect_sensitive_data
+    rank: 30
+    action: BLOCK
+configuration_note: >-
+  Service-policy attachments are UI-only during the current beta. Attach these
+  input policies from Unity Gateway > Models > Policies after creating the service.

@@ -1,0 +1,22 @@
+resources:
+  jobs:
+    service_policy_async_evaluation:
+      name: "[${bundle.target}] Service policy async evaluation"
+      parameters:
+        - name: benchmark_run_id
+          default: ""
+      environments:
+        - environment_key: default
+          spec:
+            client: "4"
+            dependencies:
+              - PyYAML==6.0.2
+      tasks:
+        - task_key: assess_policy_accuracy
+          environment_key: default
+          spark_python_task:
+            python_file: ../tests/run_async_evaluation.py
+            source: WORKSPACE
+            parameters:
+              - --benchmark-run-id
+              - "{{job.parameters.benchmark_run_id}}"

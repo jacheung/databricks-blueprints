@@ -1,0 +1,12 @@
+bundle:
+  name: service_policy_benchmark
+
+include:
+  - resources/*.yml
+
+targets:
+  e2-demo-fe:
+    default: true
+    mode: development
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
