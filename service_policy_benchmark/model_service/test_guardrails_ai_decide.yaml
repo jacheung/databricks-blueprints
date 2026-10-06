@@ -1,0 +1,22 @@
+api_version: 2.1
+resource: unity_catalog_model_service
+parent: schemas/main.jon_cheung
+model_service_id: test_guardrails_ai_decide
+full_name: main.jon_cheung.test_guardrails_ai_decide
+comment: Latency comparison service with no service policies; guardrails run client-side via ai_decide.
+config:
+  # Mirrors test_guardrails, whose GET shows prefix test_guardrails -> table test_guardrails_payload.
+  inference_table:
+    parent: schemas/main.jon_cheung
+    table_name_prefix: test_guardrails_ai_decide
+  routing:
+    destinations:
+      - name: gemini_3_6_flash_primary
+        destination_type: DESTINATION_TYPE_PAY_PER_TOKEN_FOUNDATION_MODEL
+        pay_per_token_config:
+          model: models/system.ai.databricks-gemini-3-6-flash
+        traffic_percentage: 100
+deployment:
+  method: REST
+  create_path: /api/2.1/unity-catalog/model-services?parent=schemas/main.jon_cheung&model_service_id=test_guardrails_ai_decide
+  profile: e2-demo-fe

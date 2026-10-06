@@ -1,9 +1,4 @@
-#!/usr/bin/env python3
-"""Generate labeled Unity Gateway guardrail benchmark prompts."""
-
-import argparse
-import csv
-from pathlib import Path
+"""Labeled Unity Gateway guardrail benchmark prompts."""
 
 
 POLICY_CASES = {
@@ -196,27 +191,3 @@ def build_rows(blocked_cases_per_policy=20, allowed_cases_per_policy=10):
                 )
     return rows
 
-
-def write_csv(rows, destination):
-    with destination.open("w", newline="", encoding="utf-8") as output_file:
-        writer = csv.DictWriter(output_file, fieldnames=rows[0].keys())
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--output-dir", type=Path, default=Path("generated"))
-    arguments = parser.parse_args()
-
-    rows = build_rows()
-    arguments.output_dir.mkdir(parents=True, exist_ok=True)
-    write_csv(rows, arguments.output_dir / "service_policy_queries.csv")
-
-    blocked_count = sum(row["expected_result"] == "BLOCK" for row in rows)
-    allowed_count = sum(row["expected_result"] == "ALLOW" for row in rows)
-    print(f"Generated {len(rows)} queries: {blocked_count} BLOCK, {allowed_count} ALLOW.")
-
-
-if __name__ == "__main__":
-    main()

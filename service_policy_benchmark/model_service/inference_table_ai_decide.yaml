@@ -1,0 +1,11 @@
+resource: unity_gateway_inference_table
+model_service: main.jon_cheung.test_guardrails_ai_decide
+table: main.jon_cheung.test_guardrails_ai_decide_payload
+enabled: true
+sampling_fraction: 1.0
+configuration_note: >-
+  Matches main.jon_cheung.test_guardrails so both comparison arms carry the same
+  logging overhead. Set at creation through config.inference_table in
+  test_guardrails_ai_decide.yaml (parent + table_name_prefix).
+validation:
+  query: SELECT * FROM main.jon_cheung.test_guardrails_ai_decide_payload LIMIT 10

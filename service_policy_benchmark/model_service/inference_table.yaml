@@ -4,8 +4,8 @@ table: main.jon_cheung.test_guardrails_payload
 enabled: true
 sampling_fraction: 1.0
 configuration_note: >-
-  Configure this after model-service creation in Unity Gateway > Models >
-  main.jon_cheung.test_guardrails > Inference tables. The beta API does not
-  expose a CLI or REST operation for this setting.
+  Set at creation through the model-service API's config.inference_table
+  (parent + table_name_prefix), or in Unity Gateway > Models >
+  main.jon_cheung.test_guardrails > Inference tables.
 validation:
   query: SELECT * FROM main.jon_cheung.test_guardrails_payload LIMIT 10

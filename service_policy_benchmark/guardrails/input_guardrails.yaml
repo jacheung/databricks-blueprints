@@ -5,13 +5,13 @@ mode: ENFORCE
 policies:
   - name: block_jailbreak_input
     builtin_policy: system.ai.block_jailbreak
-    rank: 10
+    rank: 1
   - name: block_unsafe_content_input
     builtin_policy: system.ai.block_unsafe_content
-    rank: 20
+    rank: 1
   - name: detect_sensitive_data_input
     builtin_policy: system.ai.detect_sensitive_data
-    rank: 30
+    rank: 1
     action: BLOCK
 configuration_note: >-
   Service-policy attachments are UI-only during the current beta. Attach these

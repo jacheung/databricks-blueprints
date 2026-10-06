@@ -1,0 +1,53 @@
+resources:
+  jobs:
+    latency_comparison:
+      name: "[${bundle.target}] ai_decide vs. service policy latency comparison"
+      parameters:
+        - name: corpus_version_id
+          default: service-policy-v3
+        - name: repetitions
+          default: "3"
+        - name: seed
+          default: "7"
+        - name: max_queries
+          default: "0"
+      environments:
+        - environment_key: default
+          spec:
+            client: "4"
+            dependencies:
+              - PyYAML==6.0.2
+      tasks:
+        - task_key: validate_latency_preflight
+          environment_key: default
+          spark_python_task:
+            python_file: ../tests/validate_latency_preflight.py
+            source: WORKSPACE
+        - task_key: run_latency_comparison
+          depends_on:
+            - task_key: validate_latency_preflight
+          environment_key: default
+          spark_python_task:
+            python_file: ../tests/run_latency_comparison.py
+            source: WORKSPACE
+            parameters:
+              - --latency-run-id
+              - "{{job.run_id}}"
+              - --corpus-version-id
+              - "{{job.parameters.corpus_version_id}}"
+              - --repetitions
+              - "{{job.parameters.repetitions}}"
+              - --seed
+              - "{{job.parameters.seed}}"
+              - --max-queries
+              - "{{job.parameters.max_queries}}"
+        - task_key: summarize_latency_comparison
+          depends_on:
+            - task_key: run_latency_comparison
+          environment_key: default
+          spark_python_task:
+            python_file: ../tests/summarize_latency_comparison.py
+            source: WORKSPACE
+            parameters:
+              - --latency-run-id
+              - "{{job.run_id}}"
