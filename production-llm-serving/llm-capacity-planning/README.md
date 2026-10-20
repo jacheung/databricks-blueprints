@@ -1,6 +1,12 @@
 # LLM Capacity Planning
 
-**TLDR: This blueprint helps size LLM capacity on Databricks.**
+## Question
+
+When does your LLM workload need provisioned throughput, and how much capacity should you provision?
+
+## Takeaway
+
+**Size capacity from measured input/output tokens and expected QPM, using PPT while it meets demand and PT with PPT fallback when dedicated capacity is needed.**
 
 - Profile real requests to measure token usage and latency.
 - Determine whether pay-per-token (PPT) meets expected demand.
@@ -27,9 +33,9 @@ From these, derive your throughput demand: `ITPM = input_tokens × QPM` and `OTP
 
 ---
 
-## The Two Levers
+### The Two Levers
 
-### Pay-Per-Token (PPT)
+#### Pay-Per-Token (PPT)
 Shared infrastructure — pay only for tokens consumed, no capacity to manage. Hard ceilings on both input and output throughput.
 
 | | GPT OSS 120B |
@@ -42,14 +48,14 @@ Shared infrastructure — pay only for tokens consumed, no capacity to manage. H
 
 The 20:1 ITPM-to-OTPM ratio reflects the compute asymmetry between prefill and decode: input tokens are processed in a single parallel forward pass (prefill), while each output token is generated one at a time, attending over the full context on every step (decode). The same GPU serves both, but decode is far more resource-intensive per token — which is why input and output throughput must be sized separately. **Output throughput is almost always the binding constraint** — a RAG workload at 200 input / 200 output tokens per request hits its OTPM ceiling at just 50 QPM. Size against OTPM first.
 
-### Provisioned Throughput (PT)
+#### Provisioned Throughput (PT)
 Dedicated capacity measured in **model units**, billed hourly. Guarantees a throughput floor and includes burst scaling — Databricks can temporarily step up one model unit increment (e.g., 50 → 100 units) when regional capacity is available.
 
 ---
 
-## Sizing Workflow
+## How to run
 
-### Step 1 — Profile your workload (`profile_workload.ipynb`)
+### Step 1 — Profile your workload (`profile_workload.py`)
 
 Fill in the **CUSTOMER CONFIGURATION** cell at the top of the notebook: set `PPT_MODEL`, replace `SYSTEM_PROMPT` with your real system prompt, and populate the sample lists that match your workload:
 
@@ -86,8 +92,8 @@ This gives you a concrete QPM ceiling to plan against. If you expect to exceed i
 Use the **[Databricks GenAI Pricing Calculator](https://www.databricks.com/product/pricing/genai-pricing-calculator)** with:
 - Cloud provider + region
 - Model
-- **Avg input tokens** — from `profile_workload.ipynb`
-- **Avg output tokens** — from `profile_workload.ipynb`
+- **Avg input tokens** — from `profile_workload.py`
+- **Avg output tokens** — from `profile_workload.py`
 - **QPM floor** — use the `ppt_max_qpm` from Step 2 as your starting point, or your P75–P90 if you have production data. Apply a 2–3× safety factor if sizing a new workload and cannot tolerate a queue.
 
 After deploying, load test with traffic that matches your real input/output distribution. Observe where 429s begin — that is your actual ceiling. Adjust model units and repeat if needed.
@@ -118,8 +124,8 @@ Configure fallback in the model service rather than deploying a custom routing m
 
 ---
 
-## Contents
+### Contents
 
 | File | Purpose |
 |---|---|
-| `profile_workload.ipynb` | Profile your workload on PPT: measure input/output tokens, TTFT, TPOT |
+| `profile_workload.py` | Profile your workload on PPT: measure input/output tokens, TTFT, TPOT |
