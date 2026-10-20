@@ -6,3 +6,4 @@
 *.DS_store
 mlruns/
 .databricks
+.vscode/
