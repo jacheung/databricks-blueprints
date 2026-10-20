@@ -1,6 +1,6 @@
 # RAG Blueprints 🧺
 
-Three blueprints for building Retrieval-Augmented Generation (RAG) systems on Databricks. They share a common parameterized config pattern but differ in vector store, deployment target, and complexity.
+Two blueprints for building Retrieval-Augmented Generation (RAG) systems on Databricks. They share a common parameterized config pattern but differ in vector store, deployment target, and complexity.
 
 ---
 
@@ -54,20 +54,16 @@ Best for: use cases where you want a fully open-source vector store, need to con
 
 ---
 
-## [parameterized-rag-agent](./parameterized-rag-agent)
-
-**The agent upgrade.** A single-file (`rag-agent.py`) implementation that wraps a RAG chain inside a **Databricks agent** framework. Compared to the chain blueprints, this adds agent-level orchestration and is structured for tool-calling patterns rather than a simple chain.
-
-Best for: scenarios where the retrieval step is one tool among many, or where you want to extend the RAG pattern toward multi-step reasoning.
-
----
-
 ## Quick comparison
 
-| | parameterized-rag-chain | OSS-parameterized-rag-chain | parameterized-rag-agent |
-|---|---|---|---|
-| Vector store | Databricks Vector Search | FAISS (DBFS) | Databricks Vector Search |
-| LLM serving | Databricks endpoint | Provisioned throughput endpoint | Databricks endpoint |
-| Structure | 3 notebooks | 3 notebooks | 1 file |
-| Review App | Yes | No | No |
-| Pattern | Chain | Chain | Agent |
+| | parameterized-rag-chain | OSS-parameterized-rag-chain |
+|---|---|---|
+| Vector store | Databricks Vector Search | FAISS (DBFS) |
+| LLM serving | Databricks endpoint | Provisioned throughput endpoint |
+| Structure | 3 notebooks | 3 notebooks |
+| Review App | Yes | No |
+| Pattern | Chain | Chain |
+
+## Retired
+
+The early [parameterized-rag-agent experiment](../retired/parameterized-rag-agent/) is preserved in the retired collection. It demonstrates arithmetic tool calls; retrieval was not implemented.

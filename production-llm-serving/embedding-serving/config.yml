@@ -1,0 +1,63 @@
+# ============================================================
+# Shared config for embedding endpoint deployment & benchmarking
+# Both notebooks read from this file:
+#   - GTE Express vs Classic GPU Serving  (endpoint creation)
+#   - embedding-endpoint-benchmark        (load testing)
+# ============================================================
+
+# ── Environment requirement ────────────────────────────────────
+# GTE v1.5 needs transformers 4.x (custom Alibaba-NLP/new-impl RoPE code).
+# AI env v5 ships transformers 4.57.1 natively — use v5, NOT v6.
+# v6 ships transformers 5.8.1 which breaks GTE.
+required_ai_env: "v5"       # Serverless GPU base environment
+
+# ── Unity Catalog ──────────────────────────────────────────────
+unity_catalog:
+  catalog: "main"
+  schema: "jon_cheung"
+
+# ── Models ─────────────────────────────────────────────────────
+models:
+  gte:
+    hf_name: "Alibaba-NLP/gte-large-en-v1.5"
+    registered_name: "gte_large_en_v1_5_express"   # fully qualified = {catalog}.{schema}.{this}
+    pt_system_model: "system.ai.gte_large_en_v1_5"  # system.ai model for PT
+    notes: "Custom RoPE CUDA kernels; requires transformers <5. Used for ALL endpoints."
+
+# ── Endpoints ──────────────────────────────────────────────────
+# Each entry drives both creation (Express notebook) and
+# benchmarking (load-test notebook).  'type' controls payload
+# format in the load-test harness: pt | custom | ppt.
+endpoints:
+  pt:
+    name: "jc-gte-large-pt"
+    type: "pt"
+    label: "Provisioned Throughput"
+    color: "#1f77b4"          # chart color (Plotly)
+    min_throughput: 500       # tokens/sec
+    max_throughput: 3500
+  express_t4:
+    name: "jc-gte-large-express-t4"
+    type: "custom"
+    label: "Express GPU (T4)"
+    color: "#ff7f0e"
+    workload: "GPU_SMALL"
+    gpu: "T4 (16GB)"
+  express_a10g:
+    name: "jc-gte-large-express-a10g"
+    type: "custom"
+    label: "Express GPU (A10G)"
+    color: "#2ca02c"
+    workload: "GPU_MEDIUM"
+    gpu: "A10G (24GB)"
+  ppt:
+    name: "databricks-gte-large-en"
+    type: "ppt"
+    label: "Pay-per-Token (FMAPI)"
+    color: "#d62728"
+
+# ── Load test parameters ──────────────────────────────────────
+load_test:
+  token_count: 256            # approx tokens per prompt
+  concurrency_levels: [1, 2, 4, 8, 16, 32]
+  requests_per_level: 100
