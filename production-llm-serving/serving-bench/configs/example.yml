@@ -1,0 +1,55 @@
+# Sample config, committed for reference; copy it to configs/<hf repo name, lowercased>.yml.
+# Real configs in this folder are gitignored: the readout records what ran.
+# One config per model drives 01_deploy and 02_benchmark. The agent writes it from the options the
+# customer approved in discover.py; copy and edit by hand otherwise.
+
+model:
+  hf_name: Alibaba-NLP/gte-large-en-v1.5
+  task: embedding              # embedding | chat
+  trust_remote_code: true      # from discover.py; GTE v1.5 ships custom modeling code
+  ai_env: "5"                  # serverless GPU AI env custom models are logged on; discover.py sets the latest
+  ai_env_candidates: ["6", "5", "4"]   # workspace's newest three; 00_compat_check tries these if ai_env fails
+  registered_name: gte_large_en_v1_5   # UC model name for custom endpoints: {catalog}.{schema}.{this}
+
+unity_catalog:
+  catalog: main
+  schema: your_schema          # results tables land here too
+
+# Paste `endpoint` blocks from discover.py output. Dedicated endpoints (pt, custom) are created
+# by 01_deploy if missing; ppt endpoints are shared and only queried.
+endpoints:
+  - name: sb-gte-large-en-v1-5-pt
+    method: pt
+    entity_name: system.ai.gte_large_en_v1_5
+    entity_version: "2"
+    min_provisioned_throughput: 19000   # one increment, from the optimization API
+    max_provisioned_throughput: 19000
+  - name: sb-gte-large-en-v1-5-gpu-small
+    method: custom
+    label: Custom GPU (T4)
+    workload_type: GPU_SMALL            # T4
+    scale_to_zero_enabled: false
+  - name: sb-gte-large-en-v1-5-gpu-medium
+    method: custom
+    label: Custom GPU (A10G)
+    workload_type: GPU_MEDIUM           # A10G
+    scale_to_zero_enabled: false
+  - name: databricks-gte-large-en
+    method: ppt
+
+load_test:
+  input_tokens: 256
+  concurrency_levels: [1, 2, 4, 8, 16, 32]
+  requests_per_level: 100      # minimum per level
+  requests_per_client: 20      # per level: max(requests_per_level, requests_per_client × concurrency)
+  warmup_requests: 5
+  timeout_seconds: 180
+  max_tokens: 128              # chat only
+
+idle_test:
+  idle_seconds: [5, 30, 60, 300]   # [] skips the idle experiment
+  reps: 3
+  warmup_requests: 10
+
+cleanup:
+  delete_endpoints_after_benchmark: true   # dedicated endpoints tagged created_by=serving-bench; never ppt
