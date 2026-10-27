@@ -3,7 +3,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from discover import ai_envs_from, build_options, cloud_of, model_settings, parse_gpu_shapes, to_markdown  # noqa: E402
+import discover  # noqa: E402
+from discover import ai_envs_from, build_options, cloud_of, fetch_hf, model_settings, parse_gpu_shapes, to_markdown  # noqa: E402
 
 GIB = 1024**3
 GTE = "Alibaba-NLP/gte-large-en-v1.5"
@@ -16,11 +17,11 @@ AWS_SHAPES = {
 }
 
 
-def hf(name=GTE, weights=int(1.6 * GIB), config=None, chat_template=False):
+def hf(name=GTE, weights=int(1.6 * GIB), config=..., chat_template=False):
     return {
         "hf_name": name,
         "metadata": {"siblings": [{"rfilename": "model.safetensors", "size": weights}]},
-        "config": config if config is not None else {"auto_map": {"AutoModel": "x"}},
+        "config": config if config is not ... else {"auto_map": {"AutoModel": "x"}},
         "chat_template": chat_template,
     }
 
@@ -244,3 +245,93 @@ def test_cloud_of_workspace_host():
     assert cloud_of("https://e2-demo-field-eng.cloud.databricks.com") == "aws"
     assert cloud_of("https://adb-123.4.azuredatabricks.net/") == "azure"
     assert cloud_of("https://123.4.gcp.databricks.com") == "gcp"
+
+
+LLAMA_70B = "meta-llama/Llama-3.3-70B-Instruct"
+LLAMA_CATALOG = "system.ai.llama_v3_3_70b_instruct"
+CHAT_PT_VERSION = [
+    {"version": "1", "status": "READY",
+     "optimization": {"optimizable": True, "task": "llm/v1/chat", "throughput_chunk_size": 9500}},
+]
+
+
+def test_recommends_the_smallest_gpu_that_fits():
+    options = build_options("embedding", hf(), {"gpu_shapes": AWS_SHAPES, "catalog": [], "endpoints": []})
+    recommended = [o["target"] for o in options if o["recommended"]]
+    assert recommended == ["GPU_SMALL"]
+    assert "recommended" in to_markdown(options)
+
+
+def test_gated_model_without_config_still_finds_pt_ppt_and_reports_size():
+    gated = hf(LLAMA_70B, weights=131 * GIB, config=None, chat_template=True)
+    options = build_options(
+        "chat",
+        gated,
+        {
+            "gpu_shapes": AWS_SHAPES,
+            "catalog": [catalog_model(LLAMA_CATALOG, LLAMA_70B, CHAT_PT_VERSION)],
+            "endpoints": [ppt_endpoint("databricks-meta-llama-3-3-70b-instruct", LLAMA_CATALOG, "llm/v1/chat")],
+        },
+    )
+    assert [o["viable"] for o in by_method(options, "pt")] == [True]
+    assert [o["viable"] for o in by_method(options, "ppt")] == [True]
+    custom = {o["target"]: o for o in by_method(options, "custom")}
+    assert not any(o["viable"] or o["recommended"] for o in custom.values())
+    assert "GiB" in custom["GPU_LARGE"]["reason"] and "weights only" in custom["GPU_LARGE"]["reason"]
+
+
+def test_gated_model_that_fits_needs_hf_access_for_custom():
+    gated = hf("meta-llama/Llama-3.2-1B-Instruct", weights=2 * GIB, config=None, chat_template=True)
+    options = build_options("chat", gated, {"gpu_shapes": AWS_SHAPES, "catalog": [], "endpoints": []})
+    (large,) = [o for o in by_method(options, "custom") if o["target"] == "GPU_LARGE"]
+    assert not large["viable"]
+    assert "Hugging Face access" in large["reason"]
+
+
+def _fake_hf(responses):
+    def fetch_json(url, token):
+        for key, value in responses.items():
+            if key in url:
+                if isinstance(value, Exception):
+                    raise value
+                return value
+        raise AssertionError(url)
+    return fetch_json
+
+
+def test_fetch_hf_reads_license_and_survives_a_gated_config(monkeypatch):
+    metadata = {
+        "gated": "manual",
+        "cardData": {"license": "llama3.3"},
+        "config": {"architectures": ["LlamaForCausalLM"], "tokenizer_config": {"chat_template": "{{ x }}"}},
+        "siblings": [{"rfilename": "model-00001.safetensors", "size": 131 * GIB}],
+    }
+    monkeypatch.setattr(discover, "fetch_json", _fake_hf({
+        "/api/models/": metadata,
+        "config.json": RuntimeError("Hugging Face returned HTTP 403: restricted"),
+    }))
+    result = fetch_hf(LLAMA_70B)
+    assert result["config"] is None
+    assert result["chat_template"] is True
+    assert result["license"] == "llama3.3"
+    assert result["gated"] == "manual"
+    assert "403" in result["config_error"]
+    assert model_settings(result, [6])["trust_remote_code"] is False
+
+
+def test_fetch_hf_reads_remote_code_from_public_metadata(monkeypatch):
+    metadata = {
+        "gated": False,
+        "cardData": {"license": "apache-2.0"},
+        "config": {"auto_map": {"AutoModel": "x"}, "tokenizer_config": {}},
+        "siblings": [{"rfilename": "model.safetensors", "size": GIB}],
+    }
+    monkeypatch.setattr(discover, "fetch_json", _fake_hf({
+        "/api/models/": metadata,
+        "config.json": {"num_hidden_layers": 24},
+    }))
+    result = fetch_hf(GTE)
+    assert result["config"] == {"num_hidden_layers": 24}
+    assert result["config_error"] is None and result["gated"] is False
+    assert result["chat_template"] is False
+    assert model_settings(result, [6])["trust_remote_code"] is True

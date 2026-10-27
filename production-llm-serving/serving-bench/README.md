@@ -45,15 +45,21 @@ Not every option exists for every model. PT and PPT need a `system.ai` copy of t
   - `CREATE MODEL` and `CREATE TABLE` on the target schema.
   - Read `system.ai`.
   - Query permission on the shared PPT endpoint.
-- **Data:** none. The benchmark generates inputs with the model's tokenizer. Gated Hugging Face models need `HF_TOKEN` for discovery.
+- **Data:** none. The benchmark generates inputs with the model's tokenizer. Discovery works for gated Hugging Face models without access; the benchmark needs access to load the tokenizer, or an ungated copy with the same tokenizer.
 
 ### With a coding agent
 
-[SKILL.md](SKILL.md) walks an agent through the whole workflow. To use it with Claude Code, link it to `.claude/skills/serving-bench/SKILL.md` and ask which serving method suits a model. The agent then:
+[AGENTS.md](AGENTS.md) walks an agent through the whole workflow; there is nothing to install. Start the agent from this folder and say "benchmark \<model\>":
 
-1. Asks for the model, task (`embedding` or `chat`), workspace profile and target `catalog.schema`.
-2. Runs discovery and shows every option, including the ones that won't work and why.
-3. Writes `configs/<model>.yml` from the options and settings you approve.
+- **Claude Code:** `cd serving-bench && claude`. [CLAUDE.md](CLAUDE.md) imports AGENTS.md.
+- **Other agents** (Genie Code CLI, Codex, Cursor): start them in this folder; they read AGENTS.md.
+- **Genie Code in the workspace:** import this folder and open any file in it; Genie Code reads AGENTS.md from the folder.
+
+The agent then:
+
+1. Resolves the model name to a Hugging Face repo and task, and asks for the workspace profile and target `catalog.schema`.
+2. Runs discovery: license, gated status and size on Hugging Face, then which options can serve the model in your workspace, including the ones that won't work and why.
+3. Lets you tick the options to benchmark and writes `configs/<model>.yml` from the settings you approve.
 4. Deploys and benchmarks as Databricks jobs.
 5. Reports the readout and offers cleanup.
 

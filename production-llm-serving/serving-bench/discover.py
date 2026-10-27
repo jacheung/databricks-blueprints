@@ -20,7 +20,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from hf_gpu_estimator import GIB, classify, fetch_json, kv_cache_bytes, model_metadata, weight_bytes
+from hf_gpu_estimator import GIB, classify, fetch_json, kv_cache_bytes, weight_bytes
 
 TASKS = {"embedding": "llm/v1/embeddings", "chat": "llm/v1/chat"}
 DEFAULT_CONTEXT = {"embedding": 512, "chat": 4096}
@@ -100,7 +100,7 @@ def ppt_options(task: str, hf: dict, workspace: dict) -> list[dict]:
 
 
 def custom_options(task: str, hf: dict, context: int, shapes: dict) -> list[dict]:
-    remote_code = "auto_map" in hf["config"]
+    remote_code = remote_code_of(hf)
     blocker = None
     if task == "chat" and remote_code:
         blocker = "Custom chat adapter does not run remote model code"
@@ -108,11 +108,13 @@ def custom_options(task: str, hf: dict, context: int, shapes: dict) -> list[dict
         blocker = "Tokenizer has no chat template"
     try:
         weights, _ = weight_bytes(hf["metadata"])
-        kv = kv_cache_bytes(hf["config"], context, 1, 2) if task == "chat" else 0
+        # Without config.json (gated repo), the KV cache is unknown: estimate weights only.
+        kv = kv_cache_bytes(hf["config"], context, 1, 2) if task == "chat" and hf["config"] else 0
     except RuntimeError as error:
         blocker = blocker or f"Memory estimate unavailable: {error}"
         weights = kv = 0
     required = int((weights * 1.2 + kv) * 1.15)
+    estimate = "weights only" if hf["config"] is None else ""
     options = []
     for workload, shape in shapes.items():
         gpu, memory = shape["gpu"], shape["memory_gb"]
@@ -125,10 +127,11 @@ def custom_options(task: str, hf: dict, context: int, shapes: dict) -> list[dict
             continue
         fit = classify(required, 1, memory, 0.9)
         viable = fit["status"] != "unsupported"
-        reason = (
-            f"1x {gpu} {memory}GB: needs ~{required / GIB:.1f} GiB, "
-            f"{fit['utilization_percent']}% of usable VRAM ({fit['status']})"
-        )
+        needs = f"~{required / GIB:.1f} GiB" + (f" ({estimate})" if estimate else "")
+        reason = f"1x {gpu} {memory}GB: needs {needs}, {fit['utilization_percent']}% of usable VRAM ({fit['status']})"
+        if viable and hf["config"] is None:
+            viable = False
+            reason += "; needs Hugging Face access to this gated repo to deploy"
         if remote_code:
             reason += "; needs trust_remote_code"
         if shape["notes"]:
@@ -141,6 +144,9 @@ def custom_options(task: str, hf: dict, context: int, shapes: dict) -> list[dict
             "scale_to_zero_enabled": False,
         }
         options.append(_option("custom", workload, viable, reason, endpoint if viable else None))
+    fitting = [o for o in options if o["viable"]]
+    if fitting:
+        min(fitting, key=lambda o: shapes[o["target"]]["memory_gb"])["recommended"] = True
     return options
 
 
@@ -149,6 +155,7 @@ def _option(method, target, viable, reason, endpoint=None) -> dict:
         "method": method,
         "target": target,
         "viable": viable,
+        "recommended": False,  # custom only: the smallest GPU that fits
         "reason": reason,
         "endpoint": endpoint,
     }
@@ -173,11 +180,15 @@ def model_settings(hf: dict, ai_envs: list[int]) -> dict:
     """
     return {
         "hf_name": hf["hf_name"],
-        "trust_remote_code": "auto_map" in hf["config"],
+        "trust_remote_code": remote_code_of(hf),
         "registered_name": re.sub(r"[^a-z0-9]+", "_", hf["hf_name"].split("/")[-1].lower()).strip("_"),
         "ai_env": str(ai_envs[0]),
         "ai_env_candidates": [str(v) for v in ai_envs[:3]],
     }
+
+
+def remote_code_of(hf: dict) -> bool:
+    return any("auto_map" in (c or {}) for c in (hf["config"], hf["metadata"].get("config")))
 
 
 def ai_envs_from(base_envs: list[dict]) -> list[int]:
@@ -198,7 +209,7 @@ def to_markdown(options: list[dict]) -> str:
     rows = ["| Method | Target | Viable | Reason |", "| --- | --- | --- | --- |"]
     for o in options:
         rows.append(
-            f"| {o['method']} | {o['target']} | {'yes' if o['viable'] else 'no'} | {o['reason']} |"
+            f"| {o['method']} | {o['target']} | {'yes (recommended)' if o['recommended'] else 'yes' if o['viable'] else 'no'} | {o['reason']} |"
         )
     return "\n".join(rows)
 
@@ -293,14 +304,44 @@ def fetch_gpu_shapes(host: str) -> dict:
 
 
 def fetch_hf(hf_name: str, revision: str = "main", token: str | None = None) -> dict:
-    metadata, config = model_metadata(hf_name, revision, token)
+    """HF metadata is public even for gated repos; their files (config.json) need approved access."""
+    quoted, quoted_revision = urllib.parse.quote(hf_name, safe="/"), urllib.parse.quote(revision, safe="")
+    metadata = fetch_json(f"https://huggingface.co/api/models/{quoted}/revision/{quoted_revision}?blobs=true", token)
+    try:
+        config, config_error = fetch_json(f"https://huggingface.co/{quoted}/resolve/{quoted_revision}/config.json", token), None
+    except RuntimeError as error:
+        config, config_error = None, str(error)
     files = {s["rfilename"] for s in metadata.get("siblings", [])}
-    chat_template = "chat_template.jinja" in files
-    if not chat_template and "tokenizer_config.json" in files:
-        quoted = urllib.parse.quote(hf_name, safe="/")
-        url = f"https://huggingface.co/{quoted}/resolve/{revision}/tokenizer_config.json"
+    chat_template = "chat_template.jinja" in files or bool(
+        (metadata.get("config") or {}).get("tokenizer_config", {}).get("chat_template")
+    )
+    if not chat_template and config is not None and "tokenizer_config.json" in files:
+        url = f"https://huggingface.co/{quoted}/resolve/{quoted_revision}/tokenizer_config.json"
         chat_template = bool(fetch_json(url, token).get("chat_template"))
-    return {"hf_name": hf_name, "metadata": metadata, "config": config, "chat_template": chat_template}
+    return {
+        "hf_name": hf_name,
+        "metadata": metadata,
+        "config": config,
+        "config_error": config_error,
+        "chat_template": chat_template,
+        "license": (metadata.get("cardData") or {}).get("license"),
+        "gated": metadata.get("gated", False),
+    }
+
+
+def hf_summary(hf: dict) -> dict:
+    """Open-weights check: what the customer needs to know before choosing options."""
+    try:
+        weights = round(weight_bytes(hf["metadata"])[0] / GIB, 1)
+    except RuntimeError:
+        weights = None
+    return {
+        "license": hf["license"],
+        "gated": hf["gated"],
+        "files_accessible": hf["config"] is not None,
+        "weights_gib": weights,
+        "parameters": sum((hf["metadata"].get("safetensors") or {}).get("parameters", {}).values()) or None,
+    }
 
 
 def fetch_workspace(client, hf_name: str) -> dict:
@@ -364,6 +405,7 @@ def fetch_ai_envs(client) -> list[int]:
 def discover(hf_name: str, task: str, client, revision: str = "main") -> dict:
     hf = fetch_hf(hf_name, revision, os.getenv("HF_TOKEN"))
     return {
+        "hf": hf_summary(hf),
         "model": model_settings(hf, fetch_ai_envs(client)) | {"task": task},
         "options": build_options(
             task, hf, fetch_workspace(client, hf_name) | {"gpu_shapes": fetch_gpu_shapes(client.config.host)}
@@ -390,6 +432,7 @@ def main() -> int:
     if args.json:
         print(json.dumps(result, indent=2))
     else:
+        print(json.dumps(result["hf"]))
         print(json.dumps(result["model"]))
         print(to_markdown(result["options"]))
     return 0

@@ -1,9 +1,10 @@
----
-name: serving-bench
-description: Benchmark an open-source Hugging Face model (embedding or chat) across Databricks serving methods — provisioned throughput, pay-per-token, and custom GPU (Express) — and produce an RPS × concurrency and latency × idle-time readout. Use when someone asks which serving option to use for a specific model, or wants to compare PT, PPT, and GPU serving for it.
----
-
 # Serving bench
+
+This folder benchmarks an open-source Hugging Face model (embedding or chat) across Databricks
+serving methods — provisioned throughput, pay-per-token, and custom GPU (Express) — and produces an
+RPS × concurrency and latency × idle-time readout. Follow this workflow when someone says
+"benchmark <model>", asks which serving option to use for a specific model, or wants to compare PT,
+PPT, and GPU serving for it.
 
 Guide the customer from "I want to serve model X" to a measured comparison table. You do the
 orchestration; the customer approves choices. Files in this folder:
@@ -23,18 +24,29 @@ Pass `--profile <P>` on every CLI call.
 
 ## 1. Gather inputs
 
-Ask for: HF repo id (e.g. `Alibaba-NLP/gte-large-en-v1.5`), task (`embedding` or `chat`), profile,
-and a UC `catalog.schema` they can write to (custom models and results go there). Gated HF models need
-`HF_TOKEN` set locally for discovery.
+The customer may name the model loosely ("benchmark llama 3.3 70b"). Resolve it to an HF repo id:
+search `https://huggingface.co/api/models?search=<name>&sort=downloads` and prefer the original
+publisher's repo (e.g. `meta-llama/Llama-3.3-70B-Instruct`, not a quantized or re-uploaded copy):
+`system.ai` links to that repo, so a mirror finds no PT/PPT. Infer the task (`embedding` or `chat`)
+from the repo's `pipeline_tag`. Confirm the repo id and task in one line, then ask for the profile
+and a UC `catalog.schema` they can write to (custom models and results go there).
 
 ## 2. Discover
 
 Local: `python discover.py --model <HF> --task <task> --profile <P> --json` (needs `databricks-sdk`).
 In workspace: run `00_discover` with the `hf_name`/`task` widgets.
 
-Output: `model` (settings for the config) and `options`, each with `method`, `target`, `viable`,
-`reason`, `endpoint`. Show the customer a table of all options, including the non-viable ones and why.
-Explain:
+Output:
+
+- `hf` — the open-weights check: `license`, `gated`, `files_accessible`, `weights_gib`, `parameters`.
+  HF metadata is public even for gated repos, so size and PT/PPT are found without access. If the
+  repo isn't on HF (HTTP 401/404), it isn't an open-weights HF model: say so and stop.
+- `model` — settings for the config.
+- `options`, each with `method`, `target`, `viable`, `recommended`, `reason`, `endpoint`. For custom,
+  `recommended` marks the smallest GPU that fits.
+
+Show the customer the `hf` summary in one line (license, gated, size) and the table of all options,
+including the non-viable ones and why. Explain:
 
 - **pt** — dedicated capacity on the `system.ai` copy of the model. `endpoint` is set to the smallest
   increment. Higher increments are multiples of it. Billed while provisioned.
@@ -51,15 +63,25 @@ env's libraries is only known by trying (step 4).
 
 ## 3. Get approval, write the config
 
-Ask which options to benchmark and confirm parameters: PT capacity (default: one increment), GPU
-shapes, scale-to-zero on/off for custom (off gives stable throughput numbers; on lets the idle test
-show cold starts). Mention that dedicated endpoints bill until deleted, and that `02_benchmark`
+Ask which options to benchmark with a multi-select checkbox (`AskUserQuestion`, `multiSelect: true`)
+listing only viable options: one question for PT/PPT, one for custom GPU shapes with the recommended
+shape first and marked "(Recommended)". Drop a question whose method has nothing viable, and say why
+in one line in the other question's text (e.g. "Custom GPU isn't possible: the model needs ~181 GiB,
+more than any single GPU"). If nothing at all is viable, report why and stop.
+
+Then confirm parameters for what was picked: PT capacity (default: one increment); scale-to-zero
+on/off for custom (off gives stable throughput numbers; on lets the idle test show cold starts). Mention that dedicated endpoints bill until deleted, and that `02_benchmark`
 deletes the ones it created when it finishes (`cleanup.delete_endpoints_after_benchmark`).
 
 Write `configs/<hf repo name, lowercased>.yml` (e.g. `configs/gte-large-en-v1.5.yml`; the same name
 as its readout). If it already exists for this model, reuse it and edit only what changed. Contents: `model` block from discovery output plus `task`; `unity_catalog`; the approved
 `endpoint` blocks; `load_test`/`idle_test` from `configs/example.yml` unless the customer wants changes
 (smaller `requests_per_level` and `idle_test.idle_seconds: []` for a quick pass). Show it before deploying.
+
+If `hf.files_accessible` is false (gated repo without approved access), `02_benchmark` can't load the
+tokenizer it builds the prompt with. Ask the customer to request access on HF, or to use an ungated
+copy with the same tokenizer as `model.hf_name` (e.g. `unsloth/Llama-3.3-70B-Instruct`); the
+readout then names that copy.
 
 ## 4. Deploy
 
