@@ -47,8 +47,8 @@ from databricks.sdk.errors import NotFound
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 PROJECT_DIR = "/Workspace" + "/".join(_nb_path.split("/")[:-1])
 sys.path.insert(0, PROJECT_DIR)
-from common import (ModelCheckError, endpoint_label, incompatibility_message, library_versions, load_and_check,
-                    load_config, parse_response, request_payload, vllm_entrypoint, wait_for_endpoint)
+from common import (ModelCheckError, endpoint_label, ensure_results_tables, incompatibility_message, library_versions,
+                    load_and_check, load_config, parse_response, request_payload, vllm_entrypoint, wait_for_endpoint)
 
 dbutils.widgets.text("config_path", "")  # e.g. {PROJECT_DIR}/configs/<model>.yml
 if not dbutils.widgets.get("config_path"):
@@ -69,6 +69,13 @@ TAGS = [{"key": "created_by", "value": "serving-bench"}]
 print(f"Model: {MODEL['hf_name']} ({TASK})")
 for ep in ENDPOINTS:
     print(f"  {ep['method']:<6} {ep['name']}  [{endpoint_label(ep)}]")
+
+# COMMAND ----------
+
+# DBTITLE 1,Preflight: create the results tables
+# Fail fast on missing Unity Catalog grants, before anything billable exists; 02_benchmark appends to these.
+ensure_results_tables(spark.sql, UC)
+print(f"Results tables ready in {UC['catalog']}.{UC['schema']}")
 
 # COMMAND ----------
 

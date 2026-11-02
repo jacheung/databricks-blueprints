@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from common import (endpoint_label, incompatibility_message, parse_response, readout, readout_document, readout_markdown,
+from common import (endpoint_label, ensure_results_tables, incompatibility_message, parse_response, readout, readout_document, readout_markdown,
                     request_payload, requests_for_level, stop_sweep, vllm_entrypoint)  # noqa: E402
 
 
@@ -190,3 +190,20 @@ def test_chat_readout_names_the_serving_engine():
             "load_test": {"concurrency_levels": [1], "requests_per_level": 100}}
     assert "vLLM" in readout_document(meta, rows)
     assert "vLLM" not in readout_document(meta | {"task": "embedding"}, rows)
+
+
+def test_ensure_results_tables_creates_both_tables_if_missing():
+    statements = []
+    ensure_results_tables(statements.append, {"catalog": "main", "schema": "bench"})
+    assert statements == [
+        "CREATE TABLE IF NOT EXISTS `main`.`bench`.serving_bench_requests (run_id STRING)",
+        "CREATE TABLE IF NOT EXISTS `main`.`bench`.serving_bench_summary (run_id STRING)",
+    ]
+
+
+def test_ensure_results_tables_names_the_grants_on_failure():
+    def denied(sql):
+        raise RuntimeError("PERMISSION_DENIED: User does not have CREATE TABLE on Schema 'main.bench'")
+
+    with pytest.raises(PermissionError, match=r"main\.bench.*USE CATALOG.*CREATE TABLE.*PERMISSION_DENIED"):
+        ensure_results_tables(denied, {"catalog": "main", "schema": "bench"})

@@ -238,6 +238,25 @@ Raw data: `serving_bench_requests` and `serving_bench_summary`, filtered on `run
 """
 
 
+RESULTS_TABLES = ("serving_bench_requests", "serving_bench_summary")
+
+
+def ensure_results_tables(sql, uc: dict) -> None:
+    """Create the results tables up front so a missing grant fails before anything is billed.
+
+    One column is enough: 02_benchmark appends with mergeSchema, which adds the rest.
+    """
+    prefix = f"`{uc['catalog']}`.`{uc['schema']}`"
+    try:
+        for table in RESULTS_TABLES:
+            sql(f"CREATE TABLE IF NOT EXISTS {prefix}.{table} (run_id STRING)")
+    except Exception as error:
+        raise PermissionError(
+            f"Can't create the results tables in {uc['catalog']}.{uc['schema']}. Needs USE CATALOG, USE SCHEMA "
+            f"and CREATE TABLE (plus CREATE MODEL for custom endpoints). {error}"
+        ) from error
+
+
 class ModelCheckError(RuntimeError):
     """The model failed to load or run in this environment — usually a library-version mismatch."""
 

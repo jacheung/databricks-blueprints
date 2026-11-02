@@ -118,6 +118,10 @@ Don't silently swap GPU, AI env, or model.
 
 In workspace: run `01_deploy` interactively on Serverless GPU (AI env `model.ai_env`) instead.
 
+`01_deploy` first creates the results tables (`serving_bench_requests`, `serving_bench_summary`) if
+missing. A `PermissionError` there means the customer lacks USE CATALOG, USE SCHEMA or CREATE TABLE on
+`unity_catalog`; nothing was created. Report it and ask for another schema or the grant.
+
 ### If the model check fails
 
 `01_deploy` loads the model and runs one inference before creating anything. If that fails, the run
