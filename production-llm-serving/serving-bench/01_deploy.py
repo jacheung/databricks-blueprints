@@ -46,7 +46,7 @@ from databricks.sdk.errors import NotFound
 
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 PROJECT_DIR = "/Workspace" + "/".join(_nb_path.split("/")[:-1])
-sys.path.insert(0, PROJECT_DIR)
+sys.path.insert(0, f"{PROJECT_DIR}/lib")
 from common import (ModelCheckError, endpoint_label, ensure_results_tables, incompatibility_message, library_versions,
                     load_and_check, load_config, parse_response, request_payload, vllm_entrypoint, wait_for_endpoint)
 

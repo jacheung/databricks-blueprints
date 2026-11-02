@@ -29,7 +29,7 @@ import sys
 
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 PROJECT_DIR = "/Workspace" + "/".join(_nb_path.split("/")[:-1])
-sys.path.insert(0, PROJECT_DIR)
+sys.path.insert(0, f"{PROJECT_DIR}/lib")
 from common import ModelCheckError, library_versions, load_and_check, load_config
 
 dbutils.widgets.text("config_path", "")  # e.g. {PROJECT_DIR}/configs/<model>.yml

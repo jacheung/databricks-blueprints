@@ -3,7 +3,7 @@
 
 No endpoints needed: reads serving_bench_summary and serving_bench_requests for one run_id.
 
-    python make_readout.py --config configs/gte-large-en-v1.5.yml --run-id run_x --profile PROFILE
+    python lib/make_readout.py --config configs/gte-large-en-v1.5.yml --run-id run_x --profile PROFILE
 """
 
 from __future__ import annotations
@@ -350,7 +350,7 @@ def main() -> int:
         "load_test": cfg["load_test"], "idle_test": cfg.get("idle_test") or {},
         "endpoints": [ep | {"label": endpoint_label(ep)} for ep in cfg["endpoints"]],
     }
-    out = Path(args.out or Path(__file__).parent / "readouts" / cfg["model"]["hf_name"].split("/")[-1].lower())
+    out = Path(args.out or Path(__file__).parent.parent / "readouts" / cfg["model"]["hf_name"].split("/")[-1].lower())
     print(write_readout(out, meta, summary, requests) / "README.md")
     return 0
 

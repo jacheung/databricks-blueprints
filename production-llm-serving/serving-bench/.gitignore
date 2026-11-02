@@ -2,3 +2,4 @@ configs/*
 !configs/example.yml
 __pycache__/
 .pytest_cache/
+.DS_Store

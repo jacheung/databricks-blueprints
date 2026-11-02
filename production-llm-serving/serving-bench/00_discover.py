@@ -9,7 +9,7 @@
 # MAGIC weights are downloaded, no endpoints are created or queried.
 # MAGIC
 # MAGIC Copy the `endpoint` blocks you want into `configs/<model>.yml`, then run `01_deploy`.
-# MAGIC Same logic as `python discover.py` on a laptop.
+# MAGIC Same logic as `python lib/discover.py` on a laptop.
 
 # COMMAND ----------
 
@@ -19,7 +19,7 @@ import sys
 from databricks.sdk import WorkspaceClient
 
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
-sys.path.insert(0, "/Workspace" + "/".join(_nb_path.split("/")[:-1]))
+sys.path.insert(0, "/Workspace" + "/".join(_nb_path.split("/")[:-1]) + "/lib")
 from discover import discover, to_markdown
 
 dbutils.widgets.text("hf_name", "Alibaba-NLP/gte-large-en-v1.5")

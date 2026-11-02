@@ -5,7 +5,7 @@ Read-only: reads HF metadata (no weights), system.ai catalog metadata, PT optimi
 info, serving endpoint metadata, the workspace's serverless GPU AI environments, and the
 custom-serving GPU list from the docs for the workspace's cloud. Creates nothing and sends no inference traffic.
 
-    python discover.py --model Alibaba-NLP/gte-large-en-v1.5 --task embedding --profile PROFILE
+    python lib/discover.py --model Alibaba-NLP/gte-large-en-v1.5 --task embedding --profile PROFILE
 """
 
 from __future__ import annotations

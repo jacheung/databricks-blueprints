@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 from common import (endpoint_label, ensure_results_tables, incompatibility_message, parse_response, readout, readout_document, readout_markdown,
                     request_payload, requests_for_level, stop_sweep, vllm_entrypoint)  # noqa: E402

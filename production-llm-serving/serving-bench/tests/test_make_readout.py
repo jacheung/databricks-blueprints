@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 from make_readout import CHARTS, level_table, normalize, series_colors, write_readout  # noqa: E402
 

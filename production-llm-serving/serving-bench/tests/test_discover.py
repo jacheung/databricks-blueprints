@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 import discover  # noqa: E402
 from discover import ai_envs_from, build_options, cloud_of, fetch_hf, model_settings, parse_gpu_shapes, to_markdown  # noqa: E402

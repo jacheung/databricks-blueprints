@@ -73,7 +73,7 @@ If the model fails on the latest AI environment, the agent asks before testing t
 2. **Discover.** Run [00_discover](00_discover.py) with the `hf_name` and `task` widgets, or from a laptop with `databricks-sdk` installed:
 
    ```bash
-   python discover.py --model Alibaba-NLP/gte-large-en-v1.5 --task embedding --profile <profile>
+   python lib/discover.py --model Alibaba-NLP/gte-large-en-v1.5 --task embedding --profile <profile>
    ```
 
    The output lists PT (smallest capacity increment), PPT, and memory fit on each GPU type your cloud offers, each with a reason. It also includes ready-to-paste `model` and `endpoint` blocks. Discovery is read-only.
@@ -88,7 +88,7 @@ If the model fails on the latest AI environment, the agent asks before testing t
 
 - `02_benchmark` shows throughput and latency curves, idle-latency charts, and a readout table. The table lists peak RPS, saturation concurrency, P50/P95 at saturation, errors, warm latency, and the mean and std of latency after the longest idle.
 - Every request is appended to `{catalog}.{schema}.serving_bench_requests`, and per-level stats to `serving_bench_summary`, both keyed by `run_id`.
-- When `02_benchmark` runs as a job, it exits with the readout as JSON, which you can fetch with `databricks jobs get-run-output`. To build the full readout (summary, charts, per-level table) from the saved data, run `python make_readout.py --config configs/<model>.yml --run-id <run_id> --profile <profile>`. It writes [readouts/](readouts/)`<model>/`, one folder per model, and needs `matplotlib` and `databricks-sdk`. No endpoints are needed, so you can regenerate it any time.
+- When `02_benchmark` runs as a job, it exits with the readout as JSON, which you can fetch with `databricks jobs get-run-output`. To build the full readout (summary, charts, per-level table) from the saved data, run `python lib/make_readout.py --config configs/<model>.yml --run-id <run_id> --profile <profile>`. It writes [readouts/](readouts/)`<model>/`, one folder per model, and needs `matplotlib` and `databricks-sdk`. No endpoints are needed, so you can regenerate it any time.
 
 ### Cleanup
 

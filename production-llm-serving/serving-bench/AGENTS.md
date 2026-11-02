@@ -11,13 +11,14 @@ orchestration; the customer approves choices. Files in this folder:
 
 | File | Role |
 | --- | --- |
-| `discover.py` | Read-only: which methods can serve the model, with reasons and ready-to-paste endpoint blocks |
+| `lib/discover.py` | Read-only: which methods can serve the model, with reasons and ready-to-paste endpoint blocks |
 | `configs/<model>.yml` | The plan you write after approval (shape: `configs/example.yml`); gitignored |
 | `01_deploy.py` | Notebook: logs/registers custom model, creates dedicated endpoints, waits, smoke-tests |
 | `02_benchmark.py` | Notebook: concurrency sweep + idle test → UC tables; exits with the readout JSON |
-| `00_discover.py` | Notebook wrapper around `discover.py` for in-workspace agents |
-| `make_readout.py` | Builds `readouts/<model>/` (markdown + charts) from a run's UC data |
+| `00_discover.py` | Notebook wrapper around `lib/discover.py` for in-workspace agents |
+| `lib/make_readout.py` | Builds `readouts/<model>/` (markdown + charts) from a run's UC data |
 | `00_compat_check.py` | Notebook: loads the model and runs one inference on a given AI env; exits `{ok, ...}` JSON |
+| `lib/common.py`, `lib/hf_gpu_estimator.py` | Helpers the notebooks and scripts import (config, payloads, readout, GPU memory fit) |
 
 Never auto-select a Databricks profile — list `databricks auth profiles` and let the customer choose.
 Pass `--profile <P>` on every CLI call.
@@ -33,7 +34,7 @@ and a UC `catalog.schema` they can write to (custom models and results go there)
 
 ## 2. Discover
 
-Local: `python discover.py --model <HF> --task <task> --profile <P> --json` (needs `databricks-sdk`).
+Local: `python lib/discover.py --model <HF> --task <task> --profile <P> --json` (needs `databricks-sdk`).
 In workspace: run `00_discover` with the `hf_name`/`task` widgets.
 
 Output:
@@ -174,13 +175,13 @@ databricks experimental aitools tools query --profile <P> \
 Build the readout folder from the run's saved data (no endpoints needed):
 
 ```bash
-python make_readout.py --config configs/<model>.yml --run-id <run_id> --profile <P>
+python lib/make_readout.py --config configs/<model>.yml --run-id <run_id> --profile <P>
 ```
 
 It writes `readouts/<hf repo name, lowercased>/README.md` with the summary table, settings, endpoints,
 four charts (throughput, latency percentiles, latency distribution, latency after idle), and a
 per-level table. One folder per model; it replaces the previous run's; history stays in the UC tables.
-Needs `matplotlib` and `databricks-sdk`. In a notebook, call `fetch_run(run_id, catalog, schema,
+Needs `matplotlib` and `databricks-sdk`. In a notebook, add `lib/` to `sys.path` and call `fetch_run(run_id, catalog, schema,
 lambda sql: [r.asDict() for r in spark.sql(sql).collect()])` and `write_readout(...)` instead.
 Re-run it any time to regenerate charts from the same run.
 

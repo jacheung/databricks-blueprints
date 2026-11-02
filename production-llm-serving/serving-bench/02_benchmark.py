@@ -55,7 +55,7 @@ nest_asyncio.apply()
 
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 PROJECT_DIR = "/Workspace" + "/".join(_nb_path.split("/")[:-1])
-sys.path.insert(0, PROJECT_DIR)
+sys.path.insert(0, f"{PROJECT_DIR}/lib")
 from common import (endpoint_label, load_config, parse_response, readout, readout_document, readout_markdown,
                     request_payload, requests_for_level, stop_sweep, wait_for_endpoint)
 
