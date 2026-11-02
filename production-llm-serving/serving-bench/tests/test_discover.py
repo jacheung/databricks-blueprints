@@ -4,7 +4,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 import discover  # noqa: E402
-from discover import ai_envs_from, build_options, cloud_of, fetch_hf, model_settings, parse_gpu_shapes, to_markdown  # noqa: E402
+from discover import (ai_envs_from, build_options, cloud_of, fetch_hf, fetch_workspace, model_settings,  # noqa: E402
+                      parse_gpu_shapes, to_markdown)
 
 GIB = 1024**3
 GTE = "Alibaba-NLP/gte-large-en-v1.5"
@@ -372,3 +373,40 @@ def test_fetch_hf_reads_remote_code_from_public_metadata(monkeypatch):
     assert result["config_error"] is None and result["gated"] is False
     assert result["chat_template"] is False
     assert model_settings(result, [6], "embedding")["trust_remote_code"] is True
+
+
+class _RestOnlyClient:
+    """Only api_client.do: SDK list helpers vary by runtime version (include_browse isn't in older SDKs)."""
+
+    def __init__(self, responses):
+        self.responses, self.calls = responses, []
+        self.api_client = self
+
+    def do(self, method, path, query=None):
+        self.calls.append((path, dict(query or {})))
+        return self.responses[(path, (query or {}).get("page_token"))]
+
+
+def test_fetch_workspace_lists_system_ai_over_rest_with_browse_and_paging():
+    models = "/api/2.1/unity-catalog/models"
+    versions = f"{models}/{GTE_CATALOG}/versions"
+    client = _RestOnlyClient({
+        (models, None): {"registered_models": [{"full_name": GTE_CATALOG,
+                                                "comment": f"From https://huggingface.co/{GTE}."}],
+                         "next_page_token": "p2"},
+        (models, "p2"): {"registered_models": [{"full_name": "system.ai.other"}]},
+        (versions, None): {"model_versions": [{"version": 1, "status": "PENDING_REGISTRATION"},
+                                              {"version": 2, "status": "READY"}]},
+        (f"/api/2.0/serving-endpoints/get-model-optimization-info/{GTE_CATALOG}/2", None): {"optimizable": True},
+        ("/api/2.0/serving-endpoints", None): {"endpoints": []},
+    })
+    result = fetch_workspace(client, GTE)
+    assert result["catalog"] == [
+        {"name": GTE_CATALOG, "comment": f"From https://huggingface.co/{GTE}.", "versions": [
+            {"version": "1", "status": "PENDING_REGISTRATION"},
+            {"version": "2", "status": "READY", "optimization": {"optimizable": True}},
+        ]},
+        {"name": "system.ai.other", "comment": "", "versions": []},
+    ]
+    assert (models, {"catalog_name": "system", "schema_name": "ai", "include_browse": "true"}) in client.calls
+    assert (versions, {"include_browse": "true"}) in client.calls

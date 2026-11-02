@@ -353,20 +353,31 @@ def hf_summary(hf: dict) -> dict:
     }
 
 
+def _list_pages(client, path: str, key: str, query: dict) -> list[dict]:
+    items = []
+    while True:
+        page = client.api_client.do("GET", path, query=query)
+        items.extend(page.get(key, []))
+        if not page.get("next_page_token"):
+            return items
+        query = query | {"page_token": page["next_page_token"]}
+
+
 def fetch_workspace(client, hf_name: str) -> dict:
+    # Raw REST, not the SDK's list helpers: the SDK on older serverless environments has no include_browse.
     catalog = []
-    for model in client.registered_models.list(
-        catalog_name="system", schema_name="ai", include_browse=True
-    ):
-        entry = {"name": model.full_name, "comment": model.comment or "", "versions": []}
+    models = "/api/2.1/unity-catalog/models"
+    for model in _list_pages(client, models, "registered_models",
+                             {"catalog_name": "system", "schema_name": "ai", "include_browse": "true"}):
+        entry = {"name": model["full_name"], "comment": model.get("comment") or "", "versions": []}
         if hf_name in source_models(entry["comment"]):
-            for v in client.model_versions.list(full_name=model.full_name, include_browse=True):
-                version = {"version": str(v.version), "status": v.status and v.status.value}
+            path = urllib.parse.quote(model["full_name"], safe="")
+            for v in _list_pages(client, f"{models}/{path}/versions", "model_versions", {"include_browse": "true"}):
+                version = {"version": str(v["version"]), "status": v.get("status")}
                 if version["status"] == "READY":
-                    path = urllib.parse.quote(model.full_name, safe="")
                     version["optimization"] = client.api_client.do(
                         "GET",
-                        f"/api/2.0/serving-endpoints/get-model-optimization-info/{path}/{v.version}",
+                        f"/api/2.0/serving-endpoints/get-model-optimization-info/{path}/{v['version']}",
                     )
                 entry["versions"].append(version)
         catalog.append(entry)
