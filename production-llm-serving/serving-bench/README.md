@@ -25,11 +25,11 @@ Not every option exists for every model. PT and PPT need a `system.ai` copy of t
 
 ### Scope
 
-- **Load test:** a closed-loop concurrency sweep (at least 100 requests per level, scaling to 20 per concurrent client). It measures achieved RPS at each concurrency level, not behavior at a target arrival rate. Beyond saturation, extra concurrency mainly adds queueing latency.
+- **Load test:** a closed-loop concurrency sweep (at least 100 requests per level, scaling to 20 per concurrent client, with a 60-second pause between levels so a per-minute rate limit spent at one level doesn't fail the next; an endpoint's sweep stops after a level with more than 50% errors). It measures achieved RPS at each concurrency level, not behavior at a target arrival rate. Beyond saturation, extra concurrency mainly adds queueing latency.
 - **Statistics:** P50 summarizes typical latency; P95/P99 are exploratory at this sample size.
 - **Idle test:** three probes per duration, up to five minutes. It measures client-observed latency after inactivity and can't separate a cold start from shared-pool load or connection setup.
-- **Chat:** latency is the full generated response, not time to first token. Custom chat runs a built-in HF causal LM in fp16 on one GPU and needs a chat template; remote-code chat models aren't supported.
-- **GPUs:** discovery reads the custom model serving GPU list from the Databricks docs for your workspace's cloud (e.g. T4, A10G and L40 on AWS; T4 and A100 on Azure; L4 on GCP). Multi-GPU types are listed but excluded: the serving adapters run the model on one GPU. GPU fit is a memory estimate; only the deploy step proves a model runs. Availability varies by region.
+- **Chat:** latency is the full generated response, not time to first token. Custom chat runs vLLM's OpenAI-compatible server in fp16 on one GPU ([custom LLM serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/serve-custom-llms), Public Preview). It needs a chat template, an architecture vLLM supports, and AI environment v6 or newer, and isn't available on GCP.
+- **GPUs:** discovery reads the custom model serving GPU list from the Databricks docs for your workspace's cloud (e.g. T4, A10G and L40 on AWS; T4 and A100 on Azure; L4 on GCP). Multi-GPU types are listed but excluded: custom serving here runs the model on one GPU. GPU fit is a memory estimate; only the deploy step proves a model runs. Availability varies by region.
 - **Cost:** not calculated. Compare results against your own pricing and utilization.
 
 ## How to run

@@ -7,7 +7,9 @@
 # MAGIC
 # MAGIC * **PT** — created from the `system.ai` model at the configured capacity.
 # MAGIC * **custom** — the HF model is logged from this notebook and registered with Express
-# MAGIC   `env_pack`, so serving replays this exact environment (torch, CUDA, transformers).
+# MAGIC   `env_pack`, so serving replays this exact environment (torch, CUDA, transformers, vLLM).
+# MAGIC   Embeddings run sentence-transformers; chat runs vLLM's OpenAI-compatible server
+# MAGIC   ([custom LLM serving](https://docs.databricks.com/aws/en/machine-learning/model-serving/serve-custom-llms)).
 # MAGIC * **ppt** — shared endpoint; only smoke-tested.
 # MAGIC
 # MAGIC Existing endpoints with the same name are reused, not modified.
@@ -16,7 +18,8 @@
 # MAGIC custom endpoint is selected. Custom models must be logged from GPU compute; CPU-logged models
 # MAGIC break at GPU serving time. PT/PPT-only configs can run on any compute.
 # MAGIC
-# MAGIC **Fails fast:** before creating anything, the model is loaded and run once on this GPU. If that
+# MAGIC **Fails fast:** before creating anything, the model is loaded and run once on this GPU (for chat,
+# MAGIC vLLM serves one request with the same command the endpoint runs). If that
 # MAGIC fails (usually a library-version mismatch, e.g. remote code written for transformers 4.x on an env
 # MAGIC with 5.x), nothing is registered or created; run `00_compat_check` on the other AI env candidates.
 
@@ -45,7 +48,7 @@ _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().not
 PROJECT_DIR = "/Workspace" + "/".join(_nb_path.split("/")[:-1])
 sys.path.insert(0, PROJECT_DIR)
 from common import (ModelCheckError, endpoint_label, incompatibility_message, library_versions, load_and_check,
-                    load_config, parse_response, request_payload, wait_for_endpoint)
+                    load_config, parse_response, request_payload, vllm_entrypoint, wait_for_endpoint)
 
 dbutils.widgets.text("config_path", "")  # e.g. {PROJECT_DIR}/configs/<model>.yml
 if not dbutils.widgets.get("config_path"):
@@ -117,8 +120,6 @@ if CUSTOM:
     from mlflow.models import infer_signature
     from mlflow.utils.env_pack import EnvPackConfig
 
-    model_path = os.path.join(tempfile.mkdtemp(), "model")
-
     if TASK == "embedding":
         class EmbeddingModel(mlflow.pyfunc.PythonModel):
             def load_context(self, context):
@@ -134,6 +135,7 @@ if CUSTOM:
                 return self.model.encode(texts, normalize_embeddings=True).tolist()
 
         encoder, LOADED = LOADED, None
+        model_path = os.path.join(tempfile.mkdtemp(), "model")
         encoder.save(model_path)  # keeps the pooling/normalize modules, unlike save_pretrained
         sample = pd.DataFrame({"text": ["serving-bench smoke test"]})
         log_kwargs = {
@@ -141,73 +143,48 @@ if CUSTOM:
             "input_example": sample,
             "signature": infer_signature(sample, encoder.encode(sample["text"].tolist()).tolist()),
             "model_config": {"trust_remote_code": MODEL["trust_remote_code"]},
+            "pip_requirements": ["sentence-transformers>=3.0", f"torch=={torch.__version__.split('+')[0]}",
+                                 f"transformers=={transformers.__version__}"],
         }
         print(f"Embedding dim: {encoder.get_sentence_embedding_dimension()}")
         del encoder
     else:
-        from mlflow.pyfunc import ChatModel
-        from mlflow.types.llm import ChatCompletionResponse
+        from mlflow.pyfunc.model import ChatCompletionResponse, ChatModel
 
-        class ChatAdapter(ChatModel):
-            """Single-GPU HF generation behind the standard chat schema."""
-
-            def load_context(self, context):
-                import torch
-                from transformers import AutoModelForCausalLM, AutoTokenizer
-
-                path = context.artifacts["model_path"]
-                self.tokenizer = AutoTokenizer.from_pretrained(path)
-                self.model = AutoModelForCausalLM.from_pretrained(path, torch_dtype=torch.float16).to("cuda").eval()
+        class Placeholder(ChatModel):
+            """The endpoint runs the vLLM entrypoint and never calls predict, but MLflow needs a model class."""
 
             def predict(self, context, messages, params):
-                import torch
+                return ChatCompletionResponse.from_dict({"choices": []})
 
-                encoded = self.tokenizer.apply_chat_template(
-                    [m.to_dict() for m in messages], add_generation_prompt=True,
-                    return_tensors="pt", return_dict=True,
-                ).to("cuda")
-                prompt_tokens = encoded["input_ids"].shape[-1]
-                temperature = params.temperature or 0.0
-                generation = {"max_new_tokens": params.max_tokens or 128, "do_sample": temperature > 0,
-                              "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id}
-                if temperature > 0:
-                    generation["temperature"] = temperature
-                with torch.inference_mode():
-                    output = self.model.generate(**encoded, **generation)[0][prompt_tokens:]
-                return ChatCompletionResponse(
-                    choices=[{"index": 0, "finish_reason": "stop",
-                              "message": {"role": "assistant",
-                                          "content": self.tokenizer.decode(output, skip_special_tokens=True)}}],
-                    usage={"prompt_tokens": prompt_tokens, "completion_tokens": len(output),
-                           "total_tokens": prompt_tokens + len(output)},
-                )
-
-        for part in LOADED:  # (tokenizer, model) from the check above
-            part.save_pretrained(model_path)
-        del LOADED
-        log_kwargs = {"python_model": ChatAdapter()}
+        model_path, LOADED = LOADED, None  # the weights folder vLLM just served in the model check
+        log_kwargs = {
+            "python_model": Placeholder(),
+            "metadata": {
+                "task": "llm/v1/chat",
+                # Runs in the artifacts folder, so --model is the logged folder's name.
+                "entrypoint": vllm_entrypoint(os.path.basename(model_path), MODEL["registered_name"],
+                                              MODEL["max_model_len"], MODEL["trust_remote_code"]),
+            },
+        }
 
     with mlflow.start_run(run_name=f"serving-bench-{MODEL['registered_name']}"):
         model_info = mlflow.pyfunc.log_model(
             name="model",
             artifacts={"model_path": model_path},
-            pip_requirements=["sentence-transformers>=3.0", f"torch=={torch.__version__.split('+')[0]}",
-                              f"transformers=={transformers.__version__}"],
             **log_kwargs,
         )
     torch.cuda.empty_cache()
 
     # Sanity-check the logged artifact before spending endpoint provisioning time on it.
-    try:
-        loaded = mlflow.pyfunc.load_model(model_info.model_uri)
-        if TASK == "embedding":
+    # Chat's placeholder has nothing to predict; the model check already ran vLLM on these weights.
+    if TASK == "embedding":
+        try:
+            loaded = mlflow.pyfunc.load_model(model_info.model_uri)
             print("Logged model output dim:", len(loaded.predict(pd.DataFrame({"text": ["check"]}))[0]))
-        else:
-            print("Logged model reply:", loaded.predict({"messages": [{"role": "user", "content": "Say hi"}],
-                                                         "max_tokens": 16})["choices"][0]["message"]["content"])
-        del loaded
-    except Exception as error:
-        raise ModelCheckError(incompatibility_message(MODEL, {"ai_env": MODEL["ai_env"]} | library_versions(), error)) from error
+            del loaded
+        except Exception as error:
+            raise ModelCheckError(incompatibility_message(MODEL, {"ai_env": MODEL["ai_env"]} | library_versions(), error)) from error
 
     model_version = mlflow.register_model(
         model_uri=model_info.model_uri,

@@ -6,7 +6,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from common import (endpoint_label, incompatibility_message, parse_response, readout, readout_document, readout_markdown,
-                    request_payload, requests_for_level)  # noqa: E402
+                    request_payload, requests_for_level, stop_sweep, vllm_entrypoint)  # noqa: E402
 
 
 def test_embedding_payloads():
@@ -100,6 +100,14 @@ def test_requests_scale_with_concurrency():
     assert requests_for_level({"requests_per_level": 100}, 32) == 100
 
 
+def test_sweep_stops_after_a_mostly_failed_level():
+    load_test = {"stop_error_rate": 0.5}
+    assert not stop_sweep(load_test, {"requests": 160, "errors": 10})
+    assert not stop_sweep(load_test, {"requests": 100, "errors": 50})
+    assert stop_sweep(load_test, {"requests": 320, "errors": 295})
+    assert not stop_sweep({}, {"requests": 640, "errors": 640})  # off unless configured
+
+
 def test_readout_reports_idle_std():
     summary = [{"endpoint": "A", "concurrency": 1, "rps": 10, "p50": 50, "p95": 60, "errors": 0}]
     idle = [{"endpoint": "A", "idle_seconds": 300, "latency_ms": v} for v in (100, 120, 140)]
@@ -122,11 +130,14 @@ def test_readout_document_records_run_and_settings():
              {"name": "sb-t4", "method": "custom", "label": "Custom GPU (T4)", "workload_type": "GPU_SMALL",
               "scale_to_zero_enabled": False},
          ],
-         "load_test": {"concurrency_levels": [1, 2], "requests_per_level": 100, "requests_per_client": 20},
+         "load_test": {"concurrency_levels": [1, 2], "requests_per_level": 100, "requests_per_client": 20,
+                       "cooldown_seconds": 60, "stop_error_rate": 0.5},
          "idle_test": {"idle_seconds": [5, 300], "reps": 3}},
         rows,
     )
     assert doc.startswith("# owner/model")
+    assert "60s pause between levels" in doc
+    assert "more than 50% errors" in doc
     assert "run_x" in doc and "2026-10-21" in doc and "256" in doc
     assert "`sb-pt`" in doc
     assert "system.ai.m v2, 19000–19000 tokens/s" in doc
@@ -160,3 +171,22 @@ def test_readout_tolerates_rare_errors_and_handles_all_bad_levels():
     assert row["peak_rps"] is None and row["saturation_concurrency"] is None
     assert row["note"] == "C1 excluded: 50% errors"
     assert "| B | — |" in readout_markdown([row])
+
+
+def test_vllm_entrypoint_serves_the_logged_weights_folder():
+    assert vllm_entrypoint("model", "qwen3_5_4b", 4096, trust_remote_code=False) == (
+        "python -u -m vllm.entrypoints.openai.api_server --model model --served-model-name qwen3_5_4b "
+        "--dtype half --max-model-len 4096 --host 0.0.0.0 --port 8080"
+    )
+    assert vllm_entrypoint("/tmp/m", "x", 2048, trust_remote_code=True, port=3000).endswith(
+        "--port 3000 --trust-remote-code")
+
+
+def test_chat_readout_names_the_serving_engine():
+    rows = readout([{"endpoint": "Custom GPU (A10G)", "concurrency": 1, "rps": 1, "p50": 9, "p95": 9, "errors": 0}], [])
+    meta = {"run_id": "r", "model": "o/m", "task": "chat", "input_tokens": 256, "date": "d", "workspace": "w",
+            "endpoints": [{"name": "sb-m", "method": "custom", "label": "Custom GPU (A10G)",
+                           "workload_type": "GPU_MEDIUM"}],
+            "load_test": {"concurrency_levels": [1], "requests_per_level": 100}}
+    assert "vLLM" in readout_document(meta, rows)
+    assert "vLLM" not in readout_document(meta | {"task": "embedding"}, rows)

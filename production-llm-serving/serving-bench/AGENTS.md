@@ -52,7 +52,8 @@ including the non-viable ones and why. Explain:
   increment. Higher increments are multiples of it. Billed while provisioned.
 - **ppt** — shared endpoint, billed per token, no idle cost; tail latency can vary with shared load.
   Identity comes from the catalog's HF link; the exact upstream revision isn't exposed.
-- **custom** — the HF model on a dedicated GPU through Express deployment. GPU fit is a memory
+- **custom** — the HF model on a dedicated GPU through Express deployment: sentence-transformers
+  for embeddings, vLLM (custom LLM serving, Public Preview, not on GCP) for chat. GPU fit is a memory
   estimate, not a guarantee; the deploy step proves it. Only single-GPU shapes; GPU availability
   varies by region.
 
@@ -120,7 +121,9 @@ In workspace: run `01_deploy` interactively on Serverless GPU (AI env `model.ai_
 ### If the model check fails
 
 `01_deploy` loads the model and runs one inference before creating anything. If that fails, the run
-fails with a `ModelCheckError` naming the AI env, transformers/torch versions, and the error. Nothing
+fails with a `ModelCheckError` naming the AI env, transformers/torch (and vLLM, for chat) versions, and
+the error. For chat, the check starts vLLM in the notebook with the endpoint's command, and the run
+output has the end of vLLM's log. Nothing
 was registered or created, so there is nothing to clean up. It is usually a library-version mismatch
 (e.g. remote code written for transformers 4.x on an env with 5.x).
 
@@ -130,7 +133,7 @@ was registered or created, so there is nothing to clean up. It is usually a libr
    environment, with `base_parameters` `{"config_path": ..., "ai_env": "<v>"}` (same JSON as deploy;
    change `notebook_path`, `run_name`, the env number, and use `"timeout_seconds": 3600`).
 3. When all finish, read each `databricks jobs get-run-output <task_run_id>` → `notebook_output.result`
-   (`{ok, ai_env, transformers, torch, error}`). Show the customer the pass/fail table.
+   (`{ok, ai_env, transformers, torch, vllm, error}`). Show the customer the pass/fail table.
 4. If any passed: set `model.ai_env` to the **newest passing** version in the config, re-upload it,
    and resubmit `01_deploy` on that env without asking again. Tell the customer which env you used.
 5. If none passed: stop and report every error. Don't try older envs, pin libraries, or change the
@@ -139,7 +142,8 @@ was registered or created, so there is nothing to clean up. It is usually a libr
 ## 5. Benchmark
 
 Submit `02_benchmark` on serverless CPU (no `compute`/`environments`), same `config_path`. A full run
-is roughly endpoints × levels × requests plus `sum(idle_seconds) × reps` (~25 min idle for the default).
+is roughly endpoints × levels × requests, plus `cooldown_seconds` between levels (~5 min per endpoint
+for the default), plus `sum(idle_seconds) × reps` (~25 min idle for the default).
 
 ```bash
 databricks jobs submit --no-wait --profile <P> --json '{

@@ -173,15 +173,45 @@ def test_large_chat_model_excludes_small_gpus():
     assert custom["GPU_LARGE"]["viable"]
 
 
-def test_custom_chat_needs_chat_template_and_no_remote_code():
-    no_template = build_options(
+SMALL_CHAT = {"num_hidden_layers": 16, "num_attention_heads": 16, "num_key_value_heads": 4, "hidden_size": 1024}
+
+
+def test_custom_chat_needs_chat_template():
+    options = build_options(
         "chat", hf(config={}, chat_template=False), {"gpu_shapes": AWS_SHAPES, "catalog": [], "endpoints": []}
     )
-    remote = build_options(
-        "chat", hf(chat_template=True), {"gpu_shapes": AWS_SHAPES, "catalog": [], "endpoints": []}
-    )
-    for options in (no_template, remote):
-        assert not any(o["viable"] for o in by_method(options, "custom"))
+    assert not any(o["viable"] for o in by_method(options, "custom"))
+
+
+def test_custom_chat_runs_remote_code_models_on_vllm():
+    remote = hf(config=SMALL_CHAT | {"auto_map": {"AutoModelForCausalLM": "x"}}, chat_template=True)
+    options = build_options("chat", remote, {"gpu_shapes": AWS_SHAPES, "catalog": [], "endpoints": []})
+    custom = {o["target"]: o for o in by_method(options, "custom")}
+    assert custom["GPU_MEDIUM"]["viable"]
+    assert "trust_remote_code" in custom["GPU_MEDIUM"]["reason"]
+
+
+def test_custom_chat_is_not_viable_on_gcp():
+    shapes = {"GPU_MEDIUM": {"gpu": "L4", "count": 1, "memory_gb": 24, "notes": ""}}
+    options = build_options("chat", hf(config=SMALL_CHAT, chat_template=True),
+                            {"gpu_shapes": shapes, "catalog": [], "endpoints": [], "cloud": "gcp"})
+    (custom,) = by_method(options, "custom")
+    assert not custom["viable"]
+    assert "GCP" in custom["reason"]
+
+
+def test_custom_chat_needs_an_ai_env_with_vllm():
+    options = build_options("chat", hf(config=SMALL_CHAT, chat_template=True),
+                            {"gpu_shapes": AWS_SHAPES, "catalog": [], "endpoints": [], "ai_envs": [5, 4]})
+    custom = by_method(options, "custom")
+    assert not any(o["viable"] for o in custom)
+    assert "v6" in custom[0]["reason"]
+
+
+def test_custom_embeddings_still_run_on_older_ai_envs():
+    options = build_options("embedding", hf(), {"gpu_shapes": AWS_SHAPES, "catalog": [], "endpoints": [],
+                                                "ai_envs": [5, 4], "cloud": "gcp"})
+    assert any(o["viable"] for o in by_method(options, "custom"))
 
 
 def test_markdown_lists_every_option():
@@ -194,13 +224,20 @@ def test_markdown_lists_every_option():
 
 
 def test_model_settings_use_latest_env_and_keep_three_candidates():
-    assert model_settings(hf(), [6, 5, 4]) == {
+    assert model_settings(hf(), [6, 5, 4], "embedding") == {
         "hf_name": GTE,
         "trust_remote_code": True,
         "registered_name": "gte_large_en_v1_5",
         "ai_env": "6",
         "ai_env_candidates": ["6", "5", "4"],
     }
+
+
+def test_chat_model_settings_keep_only_envs_with_vllm_and_set_context():
+    settings = model_settings(hf(config=SMALL_CHAT, chat_template=True), [7, 6, 5], "chat")
+    assert settings["ai_env"] == "7"
+    assert settings["ai_env_candidates"] == ["7", "6"]
+    assert settings["max_model_len"] == 4096
 
 
 def test_ai_envs_from_workspace_base_environments():
@@ -316,7 +353,7 @@ def test_fetch_hf_reads_license_and_survives_a_gated_config(monkeypatch):
     assert result["license"] == "llama3.3"
     assert result["gated"] == "manual"
     assert "403" in result["config_error"]
-    assert model_settings(result, [6])["trust_remote_code"] is False
+    assert model_settings(result, [6], "embedding")["trust_remote_code"] is False
 
 
 def test_fetch_hf_reads_remote_code_from_public_metadata(monkeypatch):
@@ -334,4 +371,4 @@ def test_fetch_hf_reads_remote_code_from_public_metadata(monkeypatch):
     assert result["config"] == {"num_hidden_layers": 24}
     assert result["config_error"] is None and result["gated"] is False
     assert result["chat_template"] is False
-    assert model_settings(result, [6])["trust_remote_code"] is True
+    assert model_settings(result, [6], "embedding")["trust_remote_code"] is True

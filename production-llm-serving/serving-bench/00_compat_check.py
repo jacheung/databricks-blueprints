@@ -8,7 +8,7 @@
 # MAGIC
 # MAGIC Use it when `01_deploy` fails its model check: run one copy per AI env candidate in parallel
 # MAGIC (each job on a different base environment), then deploy on the newest one that passes.
-# MAGIC Always exits with JSON `{ok, ai_env, transformers, torch, cuda, gpu, error}` so the job succeeds
+# MAGIC Always exits with JSON `{ok, ai_env, transformers, torch, vllm, cuda, gpu, error}` so the job succeeds
 # MAGIC and the caller reads `ok`.
 # MAGIC
 # MAGIC **Compute:** Serverless GPU (A10) with base environment AI v`ai_env`.

@@ -24,6 +24,7 @@ from hf_gpu_estimator import GIB, classify, fetch_json, kv_cache_bytes, weight_b
 
 TASKS = {"embedding": "llm/v1/embeddings", "chat": "llm/v1/chat"}
 DEFAULT_CONTEXT = {"embedding": 512, "chat": 4096}
+VLLM_MIN_AI_ENV = 6  # custom chat runs vLLM; the docs list AI v6 as the first env that ships it
 
 
 def source_models(text: str) -> set[str]:
@@ -99,11 +100,13 @@ def ppt_options(task: str, hf: dict, workspace: dict) -> list[dict]:
     return options or [_option("ppt", "-", False, "No pay-per-token endpoint serves this model")]
 
 
-def custom_options(task: str, hf: dict, context: int, shapes: dict) -> list[dict]:
+def custom_options(task: str, hf: dict, context: int, shapes: dict, cloud: str, ai_envs: list[int]) -> list[dict]:
     remote_code = remote_code_of(hf)
     blocker = None
-    if task == "chat" and remote_code:
-        blocker = "Custom chat adapter does not run remote model code"
+    if task == "chat" and cloud == "gcp":
+        blocker = "Custom LLM serving (vLLM) isn't available on GCP"
+    elif task == "chat" and not any(v >= VLLM_MIN_AI_ENV for v in ai_envs):
+        blocker = f"Custom chat runs vLLM, which needs AI env v{VLLM_MIN_AI_ENV} or newer"
     elif task == "chat" and not hf["chat_template"]:
         blocker = "Tokenizer has no chat template"
     try:
@@ -122,7 +125,7 @@ def custom_options(task: str, hf: dict, context: int, shapes: dict) -> list[dict
             options.append(_option("custom", workload, False, blocker))
             continue
         if shape["count"] > 1:
-            reason = f"{shape['count']}x {gpu}: multi-GPU; the serving adapters run the model on one GPU"
+            reason = f"{shape['count']}x {gpu}: multi-GPU; custom serving here runs the model on one GPU"
             options.append(_option("custom", workload, False, reason))
             continue
         fit = classify(required, 1, memory, 0.9)
@@ -168,23 +171,29 @@ def build_options(task: str, hf: dict, workspace: dict, context: int | None = No
     return (
         pt_options(task, hf, workspace)
         + ppt_options(task, hf, workspace)
-        + custom_options(task, hf, context, workspace["gpu_shapes"])
+        + custom_options(task, hf, context, workspace["gpu_shapes"], workspace.get("cloud", "aws"),
+                         workspace.get("ai_envs", [VLLM_MIN_AI_ENV]))
     )
 
 
-def model_settings(hf: dict, ai_envs: list[int]) -> dict:
+def model_settings(hf: dict, ai_envs: list[int], task: str) -> dict:
     """Settings 01_deploy.py needs for custom endpoints.
 
     Deploy starts on the latest AI env. If the model breaks there (e.g. GTE v1.5's remote code
-    on transformers 5), 00_compat_check tries the other candidates.
+    on transformers 5), 00_compat_check tries the other candidates. Chat keeps only envs with vLLM.
     """
-    return {
+    if task == "chat":
+        ai_envs = [v for v in ai_envs if v >= VLLM_MIN_AI_ENV] or ai_envs  # none: custom isn't viable
+    settings = {
         "hf_name": hf["hf_name"],
         "trust_remote_code": remote_code_of(hf),
         "registered_name": re.sub(r"[^a-z0-9]+", "_", hf["hf_name"].split("/")[-1].lower()).strip("_"),
         "ai_env": str(ai_envs[0]),
         "ai_env_candidates": [str(v) for v in ai_envs[:3]],
     }
+    if task == "chat":
+        settings["max_model_len"] = DEFAULT_CONTEXT["chat"]  # vLLM's context; the GPU fit uses the same
+    return settings
 
 
 def remote_code_of(hf: dict) -> bool:
@@ -404,12 +413,14 @@ def fetch_ai_envs(client) -> list[int]:
 
 def discover(hf_name: str, task: str, client, revision: str = "main") -> dict:
     hf = fetch_hf(hf_name, revision, os.getenv("HF_TOKEN"))
+    ai_envs = fetch_ai_envs(client)
+    host = client.config.host
+    workspace = fetch_workspace(client, hf_name) | {
+        "gpu_shapes": fetch_gpu_shapes(host), "cloud": cloud_of(host), "ai_envs": ai_envs}
     return {
         "hf": hf_summary(hf),
-        "model": model_settings(hf, fetch_ai_envs(client)) | {"task": task},
-        "options": build_options(
-            task, hf, fetch_workspace(client, hf_name) | {"gpu_shapes": fetch_gpu_shapes(client.config.host)}
-        ),
+        "model": model_settings(hf, ai_envs, task) | {"task": task},
+        "options": build_options(task, hf, workspace),
     }
 
 

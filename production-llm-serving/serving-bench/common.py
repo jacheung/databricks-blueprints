@@ -163,6 +163,24 @@ def requests_for_level(load_test: dict, concurrency: int) -> int:
     return max(load_test["requests_per_level"], load_test.get("requests_per_client", 0) * concurrency)
 
 
+def stop_sweep(load_test: dict, level: dict) -> bool:
+    """Past this error rate (usually HTTP 429), higher levels only re-measure the rate limit."""
+    return error_rate(level) > load_test.get("stop_error_rate", 1.0)
+
+
+def vllm_entrypoint(model_dir: str, served_name: str, max_model_len: int, trust_remote_code: bool,
+                    port: int = 8080) -> str:
+    """vLLM's OpenAI server: the endpoint's entrypoint (port 8080) and the notebook check (3000-3999).
+
+    fp16 rather than the checkpoint's dtype: T4s have no bf16, and one registered model serves every GPU.
+    """
+    command = (
+        f"python -u -m vllm.entrypoints.openai.api_server --model {model_dir} --served-model-name {served_name} "
+        f"--dtype half --max-model-len {max_model_len} --host 0.0.0.0 --port {port}"
+    )
+    return command + (" --trust-remote-code" if trust_remote_code else "")
+
+
 def endpoint_settings(ep: dict) -> str:
     """What was deployed, so a readout stands alone without its config."""
     if ep["method"] == "pt":
@@ -184,9 +202,18 @@ def readout_document(meta: dict, rows: list[dict]) -> str:
     per_client = lt.get("requests_per_client")
     requests = f"max({lt['requests_per_level']}, {per_client} × concurrency)" if per_client else str(
         lt["requests_per_level"])
+    if lt.get("cooldown_seconds"):
+        requests += f"; {lt['cooldown_seconds']}s pause between levels"
+    if lt.get("stop_error_rate") is not None:
+        requests += (f"; an endpoint's sweep stops after a level with more than "
+                     f"{lt['stop_error_rate']:.0%} errors")
     idle_line = (
         f"{', '.join(f'{s}s' for s in idle['idle_seconds'])} × {idle['reps']} reps"
         if idle.get("idle_seconds") else "not run"
+    )
+    vllm_line = (
+        "\n- Custom chat runs vLLM's OpenAI-compatible server in fp16 (custom LLM serving)."
+        if meta["task"] == "chat" and any(ep["method"] == "custom" for ep in meta["endpoints"]) else ""
     )
     return f"""# {meta['model']} ({meta['task']})
 
@@ -201,7 +228,7 @@ Run `{meta['run_id']}` on {meta['date']} in {meta['workspace']}.
 - Idle test: {idle_line}; one probe per rep after each idle duration.
 - Saturation concurrency: the lowest level reaching 90% of peak RPS. Levels with more than 1% failed
   requests are excluded from peak and saturation (see Notes); their RPS counts only requests that got through.
-- Custom models logged on AI env v{meta.get('ai_env', '?')}.
+- Custom models logged on AI env v{meta.get('ai_env', '?')}.{vllm_line}
 
 ## Endpoints
 
@@ -219,9 +246,14 @@ def library_versions() -> dict:
     import torch
     import transformers
 
+    try:
+        import vllm
+    except ImportError:
+        vllm = None
     return {
         "transformers": transformers.__version__,
         "torch": torch.__version__,
+        "vllm": vllm and vllm.__version__,
         "cuda": torch.version.cuda,
         "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
     }
@@ -230,7 +262,8 @@ def library_versions() -> dict:
 def load_and_check(model: dict, ai_env: str):
     """Load the HF model on this GPU and run one real inference before anything is deployed.
 
-    Returns (loaded, info): a SentenceTransformer for embeddings, (tokenizer, model) for chat.
+    Returns (loaded, info): a SentenceTransformer for embeddings; for chat, the local weights folder
+    after vLLM served one request from it, the same server the endpoint runs.
     Raises ModelCheckError with the environment and library versions on any failure.
     """
     import os
@@ -247,29 +280,69 @@ def load_and_check(model: dict, ai_env: str):
             )
             vector = loaded.encode(["serving-bench compatibility check"])[0]
             return loaded, versions | {"embedding_dim": len(vector)}
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        tokenizer = AutoTokenizer.from_pretrained(model["hf_name"])
-        lm = AutoModelForCausalLM.from_pretrained(model["hf_name"], torch_dtype=torch.float16)
-        lm = lm.to("cuda").eval()
-        encoded = tokenizer.apply_chat_template(
-            [{"role": "user", "content": "Say hi"}], add_generation_prompt=True,
-            return_tensors="pt", return_dict=True,
-        ).to("cuda")
-        with torch.inference_mode():
-            output = lm.generate(**encoded, max_new_tokens=8, do_sample=False)
-        reply = tokenizer.decode(output[0][encoded["input_ids"].shape[-1]:], skip_special_tokens=True)
-        return (tokenizer, lm), versions | {"reply": reply}
+        model_dir, reply = check_vllm(model)
+        return model_dir, versions | {"reply": reply}
     except Exception as error:
         raise ModelCheckError(incompatibility_message(model, versions, error)) from error
+
+
+def check_vllm(model: dict, port: int = 3000, timeout_s: int = 1200) -> tuple[str, str]:
+    """Download the weights to local disk, start vLLM on this GPU, and send one chat request.
+
+    Notebook servers only start on ports 3000-3999. Raises with the end of vLLM's log on failure.
+    """
+    import json
+    import os
+    import subprocess
+    import sys
+    import tempfile
+    import urllib.request
+
+    from huggingface_hub import snapshot_download
+
+    work_dir = tempfile.mkdtemp()  # local disk: /Workspace rejects multi-GB files
+    model_dir = os.path.join(work_dir, "model")
+    snapshot_download(model["hf_name"], local_dir=model_dir, ignore_patterns=["original/*"])
+    command = vllm_entrypoint(model_dir, model["registered_name"], model["max_model_len"],
+                              model["trust_remote_code"], port=port).split()
+    log_path = os.path.join(work_dir, "vllm.log")
+    with open(log_path, "w") as log:
+        server = subprocess.Popen([sys.executable] + command[1:], stdout=log, stderr=subprocess.STDOUT)
+    try:
+        deadline = time.time() + timeout_s
+        while True:
+            if server.poll() is not None:
+                raise RuntimeError(f"vLLM exited with code {server.returncode}")
+            try:
+                urllib.request.urlopen(f"http://localhost:{port}/health", timeout=5)
+                break
+            except OSError:
+                if time.time() > deadline:
+                    raise TimeoutError(f"vLLM not healthy after {timeout_s}s")
+                time.sleep(10)
+        body = {"model": model["registered_name"], "messages": [{"role": "user", "content": "Say hi"}],
+                "max_tokens": 8, "temperature": 0}
+        request = urllib.request.Request(f"http://localhost:{port}/v1/chat/completions", json.dumps(body).encode(),
+                                         {"Content-Type": "application/json"})
+        with urllib.request.urlopen(request, timeout=120) as response:
+            reply = json.load(response)["choices"][0]["message"]["content"]
+    except Exception as error:
+        with open(log_path) as log:
+            tail = log.read()[-3000:]
+        print(f"vLLM log tail:\n{tail}")
+        raise RuntimeError(f"{error}; vLLM log ends: {tail[-250:]}") from error
+    finally:
+        server.terminate()
+        server.wait(timeout=60)
+    return model_dir, reply
 
 
 def incompatibility_message(model: dict, versions: dict, error: Exception) -> str:
     return (
         f"{model['hf_name']} failed to load or run on AI env v{versions['ai_env']} "
         f"(transformers {versions['transformers']}, torch {versions['torch']}, "
-        f"CUDA {versions['cuda']}): {type(error).__name__}: {str(error)[:300]}\n"
+        + (f"vLLM {versions['vllm']}, " if versions.get("vllm") and model.get("task") == "chat" else "")
+        + f"CUDA {versions['cuda']}): {type(error).__name__}: {str(error)[:300]}\n"
         "This is usually a library-version incompatibility (e.g. remote model code written for "
         "transformers 4.x on an env with 5.x). No model was registered and no endpoints were "
         "created. Run 00_compat_check on the other AI env candidates "

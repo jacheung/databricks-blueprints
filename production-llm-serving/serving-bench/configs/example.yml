@@ -42,6 +42,8 @@ load_test:
   concurrency_levels: [1, 2, 4, 8, 16, 32]
   requests_per_level: 100      # minimum per level
   requests_per_client: 20      # per level: max(requests_per_level, requests_per_client × concurrency)
+  cooldown_seconds: 60         # pause between levels so per-minute rate limits (PPT) reset
+  stop_error_rate: 0.5         # stop an endpoint's sweep after a level with more errors than this
   warmup_requests: 5
   timeout_seconds: 180
   max_tokens: 128              # chat only

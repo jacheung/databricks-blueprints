@@ -15,7 +15,9 @@
 # MAGIC readout table as JSON so a job caller can fetch it with `databricks jobs get-run-output`.
 # MAGIC
 # MAGIC Requests per level scale with concurrency (`max(requests_per_level, requests_per_client × C)`) so
-# MAGIC high-concurrency windows aren't a fraction of a second. Afterwards, dedicated endpoints this framework
+# MAGIC high-concurrency windows aren't a fraction of a second. Levels are `cooldown_seconds` apart so a
+# MAGIC per-minute rate limit spent at one level doesn't fail the next, and an endpoint's sweep stops after a
+# MAGIC level with more than `stop_error_rate` errors. Afterwards, dedicated endpoints this framework
 # MAGIC created are deleted (`cleanup.delete_endpoints_after_benchmark`, default true).
 # MAGIC
 # MAGIC Chat latency is the full generated response (`stream: false`), not time to first token.
@@ -55,7 +57,7 @@ _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().not
 PROJECT_DIR = "/Workspace" + "/".join(_nb_path.split("/")[:-1])
 sys.path.insert(0, PROJECT_DIR)
 from common import (endpoint_label, load_config, parse_response, readout, readout_document, readout_markdown,
-                    request_payload, requests_for_level, wait_for_endpoint)
+                    request_payload, requests_for_level, stop_sweep, wait_for_endpoint)
 
 dbutils.widgets.text("config_path", "")  # e.g. {PROJECT_DIR}/configs/<model>.yml
 if not dbutils.widgets.get("config_path"):
@@ -168,7 +170,9 @@ request_rows, summary_rows = [], []
 loop = asyncio.get_event_loop()
 for label, ep in ENDPOINTS.items():
     print(f"\n{label} ({ep['name']})")
-    for c in LT["concurrency_levels"]:
+    for i, c in enumerate(LT["concurrency_levels"]):
+        if i and LT.get("cooldown_seconds"):
+            time.sleep(LT["cooldown_seconds"])  # let per-minute rate limits reset so levels are independent
         rows, stats = loop.run_until_complete(run_level(ep, label, c))
         request_rows += rows
         summary_rows.append(stats)
@@ -176,6 +180,9 @@ for label, ep in ENDPOINTS.items():
         print(f"  C={c:>3}  p50={p50}  RPS={stats['rps']:6.1f}  errors={stats['errors']}")
         if stats["errors"]:
             print("    sample error:", next(r["error"] for r in rows if r["phase"] == "load" and not r["success"]))
+        if stop_sweep(LT, stats):
+            print(f"  stopping {label}: {stats['errors']}/{stats['requests']} errors at C={c}")
+            break
 
 summary_df = pd.DataFrame(summary_rows)
 display(summary_df)
