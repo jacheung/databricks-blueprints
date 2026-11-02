@@ -1,52 +1,6 @@
 # Choosing a serving method for an open-source model
 
-```mermaid
-%%{init: {"flowchart": {"wrappingWidth": 320}}}%%
-flowchart TB
-    subgraph LOCAL["Local: coding agent + Databricks CLI"]
-        L1[/"Start the agent in serving-bench/<br/>CLI auth profile · databricks-sdk<br/>optional HF_TOKEN"/]
-        L2("Agent lists auth profiles;<br/>you pick one")
-        L1 --> L2
-    end
-    subgraph WS["In workspace: Genie Code (untested)"]
-        W1[/"Import serving-bench/ into the workspace;<br/>open any file (Genie Code reads AGENTS.md)"/]
-    end
-
-    L2 --> IN
-    W1 --> IN
-    IN[/"Model name · catalog.schema"/] --> RES("Resolve to the original HF repo;<br/>task from pipeline_tag; you confirm")
-    RES --> DISC("Discover (read-only)<br/>HF license, gated, size: 401/404 stops<br/>PT / PPT: system.ai copy, matching task<br/>Custom: fits one GPU, newest AI envs")
-    DISC --> OPT[("Options + reasons<br/>recommended GPU · ai_env")]
-    OPT --> PICK[/"Tick options · PT capacity · scale-to-zero<br/>gated: request access or ungated copy"/]
-    PICK --> CFG[("configs/{model}.yml")]
-
-    CFG --> PRE("Preflight: create results tables<br/>missing UC grants stop here")
-    PRE -- "custom" --> CHK("Model check on ai_env<br/>load + one inference")
-    PRE -- "PT / PPT only" --> DEP
-    CHK -- "fails" --> COMPAT("You approve: 00_compat_check<br/>on two older AI envs")
-    COMPAT -- "newest passing env" --> CHK
-    COMPAT -- "none pass" --> STOP(["Stop; report errors"])
-    CHK -- "passes" --> DEP["01_deploy: register model, create endpoints,<br/>wait for READY, smoke test"]
-    DEP --> BENCH["02_benchmark: sweep C=1 → 32, idle probes<br/>stops a sweep above 50% errors"]
-    BENCH --> TABLES[("UC: serving_bench_requests<br/>serving_bench_summary")]
-    BENCH --> CLEAN["Delete endpoints it created<br/>(never PPT)"]
-    TABLES --> READ["make_readout"]
-    READ --> OUT[("readouts/{model}/<br/>README + 4 charts")]
-
-    classDef input fill:#dbeafe,stroke:#2563eb,color:#0f172a
-    classDef check fill:#fef3c7,stroke:#d97706,color:#0f172a
-    classDef action fill:#ede9fe,stroke:#7c3aed,color:#0f172a
-    classDef output fill:#dcfce7,stroke:#16a34a,color:#0f172a
-    classDef stop fill:#fee2e2,stroke:#dc2626,color:#0f172a
-    class L1,W1,IN,PICK input
-    class L2,RES,DISC,PRE,CHK,COMPAT check
-    class DEP,BENCH,CLEAN,READ action
-    class OPT,CFG,TABLES,OUT output
-    class STOP stop
-    style WS stroke-dasharray: 5 5
-```
-
-Blue: you provide · Amber: checked · Purple: serving bench runs · Green: output · Red: stop.
+<img src="assets/workflow.svg" alt="Serving bench workflow: discover, approve, deploy, benchmark, readout" width="100%">
 
 ## Question
 
