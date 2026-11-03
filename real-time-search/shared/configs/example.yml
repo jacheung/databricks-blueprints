@@ -176,7 +176,7 @@ models:
 app:
   name: real-time-search
   l2_enabled: {qac: true, serp: true}
-  timeouts_ms: {qac_l2: 33, serp_l2: 200}   # L2 slower than this falls back to the L1 order. qac_l2 = 40 ms budget - L1 p95 (~7 ms); serving has a ~25 ms floor (2026-11-03)
+  timeouts_ms: {qac_l2: 36, serp_l2: 200}   # L2 slower than this falls back to the L1 order. qac_l2 = 40 ms budget - L1 p95 (3.7 ms, app bench); serving has a ~25 ms floor (2026-11-03)
   qac_debounce_ms: 80
   demo_scenarios: 6                 # half logged-in users, half guests; one intent category each
 

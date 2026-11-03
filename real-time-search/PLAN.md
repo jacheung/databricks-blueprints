@@ -13,7 +13,7 @@ Read this file, then the plan for your track only.
 
 | Track | Worktree and branch | Status |
 |---|---|---|
-| app | this checkout, branch `real-time-search` (also the integration branch) | `/api/search` and QAC L2 deployed; L2 has a ~25 ms serving floor, timeout 33 ms; UI search column next |
+| app | this checkout, branch `real-time-search` (also the integration branch) | `/api/search` and QAC L2 deployed; L1 p95 3.7 ms, L2 p95 ~34–38 ms (25 ms floor), timeout 36 ms; UI search column next |
 | ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 (step 6) not started |
 | data | no session; work from this checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
 
@@ -132,4 +132,4 @@ Checked by tests, not by sessions agreeing. Change one only under rule 1.
 | 2026-11-01 | QAC popularity counts all train searches; completions below a min CTR are dropped (`qac.drop_dead_ends`) | Popularity measures what users submit; engaged-only counts would apply engagement twice next to `ctr` |
 | 2026-11-01 | QAC synced table in `main.jon_cheung` (Postgres db `databricks_postgres`), snapshot mode, rerun re-snapshots | No extra Lakebase catalog; the table is rebuilt in full each run |
 | 2026-11-01 | Restructured into `data/`, `ml/` bundles + `shared/` contracts; Zerobus config removed | Team ownership and explicit contracts; Kafka replaced Zerobus |
-| 2026-11-03 | QAC L2 timeout 25 → 33 ms (40 ms budget - L1) | Serving has a ~25 ms per-call floor from the app (p50 28, p95 33–38 ms); 25 ms timed out on nearly every call |
+| 2026-11-03 | QAC L2 timeout 25 → 36 ms (40 ms budget - L1 p95 3.7 ms, both measured from the app) | Serving has a ~25 ms per-call floor from the app (p50 28, p95 33–38 ms); 25 ms timed out on nearly every call |

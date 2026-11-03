@@ -6,7 +6,7 @@ Update this file, plus this track's one status line in the top-level file, at th
 
 ## Status
 **Status as of 2026-11-03:** services resumed and checked (`check_query_embedding.py` OK, `rts-qac-l2` READY,
-`rts-vs-endpoint` ONLINE). `/api/search` deployed and verified as the app SP; QAC L2 wired with a 33 ms timeout (below).
+`rts-vs-endpoint` ONLINE). `/api/search` deployed and verified as the app SP; QAC L2 wired with a 36 ms timeout (below).
 
 ## Next
 **Next (after resuming): app wiring.**
@@ -66,8 +66,10 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
 
     A ~25 ms floor per call; candidate count and key lookups add nothing measurable (caveat: the session pipeline was
     stopped, so the session lookup likely missed). The cost is calling an endpoint, not the model or features
-  - Timeout 25 → **33 ms** (the user, option A): 40 ms QAC budget - L1 ~7 ms. The timeout enforces the budget; L2
-    shows on ~p90 of keystrokes. Rejected: scoring in the app with direct Lakebase lookups (removes the hop, but splits
+  - Timeout 25 → 33 → **36 ms** (the user: the whole request stays within 40 ms): 40 ms QAC budget - L1 p95. 33 ms
+    assumed L1 ~7 ms from one sample; `/api/bench/qac_l1` (300 back-to-back lookups, 10 prefixes) measured L1
+    p50 2.8 / p95 3.7 / p99 4.8 / max 6.5 ms, matching the notebook (2.9 / 3.7). The timeout enforces the budget; at
+    36 ms L2 shows on ~p95 of keystrokes (bench p95 33.6–37.9). Rejected: scoring in the app with direct Lakebase lookups (removes the hop, but splits
     the shared feature definition); keeping 25 ms (L2 almost never shows)
   - Typing-pace calls measured 32–56 ms (3 calls) vs ~28 ms back-to-back; idle connections may cost more. Step 7
     measures at typing pace and reports the fallback rate

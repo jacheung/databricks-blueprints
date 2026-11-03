@@ -8,6 +8,8 @@ so startup warms them in the background.
 
 from __future__ import annotations
 
+import itertools
+import itertools
 import logging
 import os
 import threading
@@ -152,6 +154,20 @@ def get_qac(q: str = "", session_id: str | None = None, user_id: str | None = No
 def get_search(q: str = "", mode: Literal["HYBRID", "ANN"] = "HYBRID", session_id: str | None = None):
     # Keyword matching covers search_text only, as in serp_l1_ai_search's recall run.
     return search(q, embed, query_index, mode, AI["serp_l1_k"], [SERP_INDEX_TEXT]) | {"session_id": session_id}
+
+
+@app.get("/api/bench/qac_l1")
+def bench_qac_l1(n: int = Query(100, ge=1, le=500)):
+    """QAC L1 (Lakebase prefix lookup) latency from inside the app, back-to-back, cycling short and long prefixes."""
+    prefixes = itertools.cycle(["a", "ca", "cam", "usb", "dog f", "iphone c", "nike shoes", "s", "lap", "wireless e"])
+    return {"lookup": latency_stats(time_calls(lambda: prefix_rows(next(prefixes)), n))}
+
+
+@app.get("/api/bench/qac_l1")
+def bench_qac_l1(n: int = Query(100, ge=1, le=500)):
+    """QAC L1 (Lakebase prefix lookup) latency from inside the app, back-to-back, cycling short and long prefixes."""
+    prefixes = itertools.cycle(["a", "ca", "cam", "usb", "dog f", "iphone c", "nike shoes", "s", "lap", "wireless e"])
+    return {"lookup": latency_stats(time_calls(lambda: prefix_rows(next(prefixes)), n))}
 
 
 @app.get("/api/bench/qac_l2")
