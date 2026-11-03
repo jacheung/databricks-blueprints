@@ -125,5 +125,27 @@ a `DeltaTableSource` keyed on `completion` would add ~20 lookups inside the 25 m
   session, so lift is optimistic vs production
 
 ### Step 6: SERP L2 (DCNv2, GPU, route-optimized)
-- [ ] Training set, DCNv2, `fe.log_model`; NDCG@10 lift over L1
+Design agreed 2026-11-03 (plan: ~/.claude/plans/streamed-fluttering-turing.md):
+- Candidates = the L1 hybrid top 200 per search (what the endpoint reranks); label cart 2 / click 1 / else 0.
+  Unjudged products are always 0 because the sim never showed them (exposure bias, for the README)
+- Inputs are Feature View features only: session (Kafka), user and item (Delta), and `RequestSource` candidate fields
+  (`rts_shared.retrieval.SERP_L2_REQUEST_COLUMNS`). Crosses inside the model; no brand/category identities
+- Brand features: measure first. Only `sess_last_brand` exists; ask data for (session, brand) / (user, brand) counts
+  only if the category+brand slice shows little lift
+- DCNv2 (3 cross layers ‖ MLP 128-64), listwise softmax loss, early stop on validation NDCG@10. LightGBM LambdaRank on
+  the same matrix as an eval-only comparator
+- Trains on Serverless GPU (one A10, AI env v6), no DDP: the data is ~300 MB
+
+- [x] Contract `SERP_L2_CANDIDATE_COLUMNS` / `SERP_L2_REQUEST_COLUMNS` / `serp_l2_records`; `models.serp_l2` training
+  settings (commit `fbd53bf`, to land on `real-time-search`)
+- [x] Local logic (`rts_ml.serp_l2` pandas only; `rts_ml.serp_l2_dcn` torch; `SerpRanker` pyfunc): 127 default tests +
+  4 torch tests. **Torch tests run as a second pytest process (`ml/tests_torch`)**: torch and LightGBM in one process
+  segfault on macOS (two OpenMP runtimes; `OMP_NUM_THREADS=1` doesn't help)
+- [x] AI Runtime check (`serp_l2_gpu_check`, run `907509776027549`, 2026-11-03): AI env v6 = Python 3.12, torch
+  2.11+cu130, A10G; `databricks-feature-engineering` 0.18.2 imports; `SerpRanker` moves to CUDA and scores within
+  1e-6 of CPU. **UCDataset: `databricks-uc-dataset==0.0.1b1` isn't on the package index ("from versions: none")**, so
+  training reads the table into memory (the user, 2026-11-03: UCDataset is nice to have; single node, small data)
+- [ ] `serp_l1_candidates`: hybrid top 200 per sampled query in Delta; recall@200 within 0.02 of 0.876
+- [ ] Training set, DCNv2, `fe.log_model`; NDCG@10 lift over L1 (and LightGBM)
+- [ ] Endpoint `rts-serp-l2` (GPU_SMALL, route-optimized) serves with online lookups
 - [ ] CPU vs GPU latency at 200/500 candidates

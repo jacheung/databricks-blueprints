@@ -16,7 +16,7 @@ Read this file, then the plan for your track only.
 | Track | Worktree and branch | Status |
 |---|---|---|
 | app | this checkout, branch `real-time-search` (also the integration branch) | QAC L1 + L2 demo with the Under-the-hood panel and the L2 inputs bar; L2 moves rows vs L1 (seen by the user); next: live-session L2 bench, user-history check, then the SERP column |
-| ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 (step 6) not started |
+| ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 (step 6): model code + AI Runtime check done, L1 candidates next |
 | data | no session; work from this checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
 
 **Rules for running tracks in parallel**

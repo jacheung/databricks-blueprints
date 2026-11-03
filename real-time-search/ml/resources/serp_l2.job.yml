@@ -1,0 +1,19 @@
+# SERP L2 (DCNv2). Tasks are added as step 6 is built; run one with `--only <task_key>`.
+resources:
+  jobs:
+    serp_l2_job:
+      name: rts-serp-l2
+      parameters:
+        - name: config_path
+          default: ${workspace.file_path}/shared/configs/${bundle.target}.yml
+      environments:
+        - environment_key: gpu   # DCNv2 trains and is logged on Serverless GPU (AI env = models.serp_l2.ai_env)
+          spec:
+            base_environment: workspace-base-environments/databricks_ai_v6
+      tasks:
+        - task_key: serp_l2_gpu_check
+          environment_key: gpu
+          compute:
+            hardware_accelerator: GPU_1xA10
+          notebook_task:
+            notebook_path: ../notebooks/serp_l2_gpu_check.py
