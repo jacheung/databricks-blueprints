@@ -73,15 +73,17 @@ def _grouped(df: pd.DataFrame, group: str) -> tuple[pd.DataFrame, list[int]]:
     return df, df.groupby(group, sort=False).size().tolist()
 
 
-def fit_ranker(train: pd.DataFrame, valid: pd.DataFrame, group: str = "group_id", label: str = "label"):
-    """LambdaRank on raw candidate rows; early-stops on validation NDCG@5."""
+def fit_ranker(train: pd.DataFrame, valid: pd.DataFrame, group: str = "group_id", label: str = "label",
+               matrix=model_matrix, eval_at: int = 5):
+    """LambdaRank on raw candidate rows; early-stops on validation NDCG@`eval_at`. `matrix` turns raw rows into
+    model inputs (SERP passes its own, for the LightGBM comparator)."""
     import lightgbm as lgb
 
     train, train_groups = _grouped(train, group)
     valid, valid_groups = _grouped(valid, group)
     ranker = lgb.LGBMRanker(**LGBM_PARAMS)
-    ranker.fit(model_matrix(train), train[label], group=train_groups,
-               eval_set=[(model_matrix(valid), valid[label])], eval_group=[valid_groups], eval_at=[5],
+    ranker.fit(matrix(train), train[label], group=train_groups,
+               eval_set=[(matrix(valid), valid[label])], eval_group=[valid_groups], eval_at=[eval_at],
                callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False)])
     return ranker
 
@@ -100,16 +102,18 @@ def bootstrap_ci(values, n_boot: int = 1000, seed: int = 0, alpha: float = 0.05)
 
 
 def slice_report(df: pd.DataFrame, slices: list[str], group: str = "group_id", label: str = "label",
-                 n_boot: int = 1000, seed: int = 0) -> list[dict]:
+                 n_boot: int = 1000, seed: int = 0, per_group=rank_metrics,
+                 metrics: tuple[str, ...] = ("mrr", "success1")) -> list[dict]:
     """L1 vs L2 on scored candidate rows (`l1`, `l2` score columns), overall and per value of each slice column
-    (constant within a group). One row per (slice, value, metric) with a paired bootstrap CI on the lift."""
-    per_group = (rank_metrics(df, "l1", group, label)
-                 .merge(rank_metrics(df, "l2", group, label), on=group, suffixes=("_l1", "_l2"))
+    (constant within a group). One row per (slice, value, metric) with a paired bootstrap CI on the lift.
+    `per_group(df, score, group, label)` returns one row per group with the `metrics` columns."""
+    per_group = (per_group(df, "l1", group, label)
+                 .merge(per_group(df, "l2", group, label), on=group, suffixes=("_l1", "_l2"))
                  .merge(df.groupby(group, as_index=False)[slices].first(), on=group))
     parts = [("all", "all", per_group)] + [(s, v, g) for s in slices for v, g in per_group.groupby(s)]
     report = []
     for name, value, g in parts:
-        for metric in ("mrr", "success1"):
+        for metric in metrics:
             l1, l2 = g[f"{metric}_l1"], g[f"{metric}_l2"]
             lo, hi = bootstrap_ci(l2 - l1, n_boot=n_boot, seed=seed)
             report.append({"slice": name, "value": value, "metric": metric, "n": len(g), "l1": l1.mean(),
