@@ -5,15 +5,18 @@ A box is ticked only when its check has passed on Databricks (`e2-demo-fe`, `mai
 Update this file, plus this track's one status line in the top-level file, at the end of every step.
 
 ## Status
-**Status as of 2026-11-03:** services resumed and checked (`check_query_embedding.py` OK, `rts-qac-l2` READY,
-`rts-vs-endpoint` ONLINE). `/api/search` deployed and verified as the app SP; QAC L2 wired with a 36 ms timeout (below).
+**Status as of 2026-11-03 (evening):** QAC L1 + L2 demo deployed with the "Under the hood" panel (clickstream →
+features and keystroke → completions), intent timeline, L2 rank badges and brand colors, all checked in the browser by
+the user. Replayed events reach all 3 session tables (pipeline on). Not yet shown: that the session-aware column
+actually changes vs L1. Session pipeline **running** (the user keeps it up for now).
 
 ## Next
-1. UI search results column (`/api/search`, HYBRID default).
-2. Scenario Play with the session pipeline running (data track owns it; start only for this check, stop after):
-   replayed events reach session features, the right column changes vs L1, and `/api/bench/qac_l2` with that live
-   session shows whether a hit lookup costs more than a miss.
-3. Step 7: per-stage p50/p95 at typing pace (not only back-to-back) and the L2 fallback rate; HYBRID vs ANN.
+1. While the pipeline is up: does the session-aware column change vs L1 after Play (do the intent tags rise)? Plus
+   `/api/bench/qac_l2` with a live session (does a hit lookup cost more than a miss?).
+2. If L2 barely moves: the `sess_last_event_type` skew (cross-track ask) and the deferred session brand count are the
+   first suspects; that's data/ml work.
+3. UI search results column (`/api/search`, HYBRID default).
+4. Step 7: per-stage p50/p95 at typing pace (not only back-to-back) and the L2 fallback rate; HYBRID vs ANN.
 
 ## Open items
 - User history in the demo: half the scenarios are logged in and the simulator reuses a user's long-term intent in 70%
@@ -37,7 +40,8 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
 - [x] Verified in the browser (2026-11-03): scenarios list (`GET /api/scenarios` 200), QAC columns, Play `sc1` produced
   to Kafka (`POST .../play` 200; `play_scenario` raises unless every event is flushed, so the SP's MSK credential
   access works). Session `demo-3c7d8c132e`, user `u017508`
-- [ ] Session panel: read the session's online features back after Play (needs the online table name from Feature Views)
+- [x] Session panel: read the session's online features back after Play (done as the per-feature table in step 5;
+  tables found in Postgres database `main`)
 - [x] `/api/search` in code (2026-11-03): `rts_app.service.search` embeds on `rts-query-embedding`, then runs
   `query_index(query_text, query_vector, HYBRID, k=200, query_columns=[search_text])`; `mode=ANN` sends the vector
   only. If our endpoint fails, it sends text only (the index embeds on pay-per-token) and returns
@@ -79,8 +83,9 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
     lookups (removes the hop, but splits the shared feature definition); keeping 25 ms (L2 almost never shows)
   - Typing-pace calls measured 32–56 ms (3 calls) vs ~28 ms back-to-back; idle connections may cost more. Step 7
     measures at typing pace and reports the fallback rate
-- [ ] Streaming pipeline running during Play, so replayed events reach session features (then re-run the bench with a
-  live session)
+- [x] Streaming pipeline running during Play, so replayed events reach session features (2026-11-03: all 3 tables land,
+  timed in the panel)
+- [ ] Re-run `/api/bench/qac_l2` with a live session (hit vs miss lookup cost)
 - [ ] Demo: replayed scenarios flip the right column vs L1
 - [x] Latency and freshness bars (2026-11-03; freshness checked in the browser by the user with the pipeline on). QAC: a
   stacked L1 + L2 bar, dashed marker at `budgets_ms.qac_total_p95` (40 ms), fixed 1.5x scale; server-side times only.
@@ -92,7 +97,7 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   freshness measure; `session_freshness`, 3 tests, 121 pass), so the poll interval doesn't change it. The online table
   (`rts_session_online_<suffix>`) is looked up by its `sess_n_clicks_30m` column, since re-materializing renames it.
   Found via `pg_catalog` (`information_schema` hides tables the role has no privilege on); the app SP reads it
-- [ ] End-to-end bars + session features (2026-11-03, deployed; browser check pending), modelled on the NBO
+- [x] End-to-end bars + session features (2026-11-03; checked in the browser by the user), modelled on the NBO
   accelerator app. All in the side panel "Under the hood" (the user, 2026-11-03: less text under the search bar):
   first "Clickstream → features" (Kafka write, app; Real-Time Mode, `output_time`; Lakebase write, `commit_time`; app
   read) and "Keystroke → completions" (L1, L2, overrun), each a bar with one row per segment on one ms scale (the
@@ -111,7 +116,7 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   `lakebase.database` (synced tables only): FE syncs each catalog's online tables into a database of that name (also
   noted in the NBO repo's `pipelineTimes.ts`). The app has a second pool for it (`features_database`, 1 test);
   `grants_job` now grants CONNECT/USAGE/SELECT in both databases and checks all 3 session tables (green 2026-11-03)
-- [ ] Databricks brand colors (2026-11-03, deployed): CSS tokens from the extended brand guide (navy/oat/white
+- [x] Databricks brand colors (2026-11-03; checked in the browser by the user): CSS tokens from the extended brand guide (navy/oat/white
   surfaces, lava accents; L1 navy, L2 lava, timeout yellow, overrun maroon hatch); text pairs checked >= 4.5:1
 - [x] Intent timeline (2026-11-03, deployed; checked in the browser by the user): Play returns `timeline` (the replayed events, in
   seconds before the last one; `scenario_timeline`, 1 test, 118 pass) and the scenario's planted `intent`. The UI shows

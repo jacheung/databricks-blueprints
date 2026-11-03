@@ -13,7 +13,7 @@ Read this file, then the plan for your track only.
 
 | Track | Worktree and branch | Status |
 |---|---|---|
-| app | this checkout, branch `real-time-search` (also the integration branch) | `/api/search` and QAC L2 deployed; L1 p95 3.7 ms, L2 p95 ~34–38 ms (25 ms floor), timeout 36 ms; UI search column next |
+| app | this checkout, branch `real-time-search` (also the integration branch) | QAC L1 + L2 demo with the Under-the-hood panel (freshness + keystroke latency); L2 timeout 36 ms; next: check L2 changes the column vs L1, then the SERP column |
 | ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 (step 6) not started |
 | data | no session; work from this checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
 
