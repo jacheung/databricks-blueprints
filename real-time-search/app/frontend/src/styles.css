@@ -24,3 +24,12 @@ ol { padding-left: 1.4rem; margin: 0.5rem 0 0; }
 li { margin: 0.35rem 0; }
 .completion { display: block; }
 .meta { font-size: 0.78rem; }
+.summary { font-size: 0.85rem; margin: 0.25rem 0; font-weight: 600; }
+li { border-radius: 4px; padding: 0.15rem 0.35rem; margin-left: -0.35rem; }
+li.change-same { opacity: 0.55; }
+li.change-up { background: #eef6ff; }
+li.change-new { background: #e3f4e8; }
+.badge { font-size: 0.72rem; font-weight: 600; margin-left: 0.45rem; padding: 0.05rem 0.35rem; border-radius: 3px; }
+.badge.up { color: #0b5cad; background: #d6e8fb; }
+.badge.down { color: #5c6670; background: #eceef0; }
+.badge.new { color: #12672f; background: #c6ebd2; }

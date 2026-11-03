@@ -35,7 +35,7 @@ def qac(typed: str, prefix_rows: Callable[[str], list[dict]], max_len: int, n: i
         try:
             scores = rerank(pool)
             order = sorted(range(len(pool)), key=lambda i: -scores[i])  # stable: ties keep the L1 order
-            l2 = {"status": "ok", "items": [pool[i] for i in order[:n]]}
+            l2 = {"status": "ok", "items": [{**pool[i], "l1_rank": i + 1} for i in order[:n]]}  # UI rank badges
         except TimeoutError:
             l2 = {"status": "timeout"}
         except Exception:

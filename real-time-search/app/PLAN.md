@@ -78,6 +78,10 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
 - [ ] Streaming pipeline running during Play, so replayed events reach session features (then re-run the bench with a
   live session)
 - [ ] Demo: replayed scenarios flip the right column vs L1
+- [x] L2 diff in the UI (2026-11-03, deployed; checked in the browser by the user): each L2 item carries `l1_rank` (its position
+  in L1 after filtering, not the table `rank`; 2 tests, 117 pass). The Session-aware column shows `▲n` / `▼n` /
+  `NEW` (from below L1's shown top 10) per row, tints rows moved up or new, dims unchanged rows, and a summary
+  line ("L2 moved 4 of 10, brought in 2 from below L1's top 10"). Only when `l2.status` is `ok`
 
 ### Step 7: Benchmark
 - [ ] `07_latency_bench`: per-stage p50/p95, L1-only vs L1+L2. Started: `/api/bench/qac_l1` and `/api/bench/qac_l2`

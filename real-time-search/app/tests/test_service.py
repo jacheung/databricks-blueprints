@@ -135,6 +135,19 @@ def test_qac_l2_reranks_the_top_candidates_and_shows_the_top_n():
     assert out["timings_ms"]["l2"] >= 0
 
 
+def test_qac_l2_items_carry_their_l1_position_for_the_ui_badges():
+    out = qac("ca", lambda p: RANKED.get(p, []), max_len=12, n=3, candidates=4,
+              rerank=lambda rows: [0.1, 0.2, 0.3, 0.9])
+    assert [(c["completion"], c["l1_rank"]) for c in out["l2"]["items"]] == [("car seat", 4), ("cat food", 3),
+                                                                            ("camera bag", 2)]
+    assert all("l1_rank" not in c for c in out["l1"])  # L1 rows are not mutated
+
+
+def test_qac_l1_rank_is_the_position_after_filtering_not_the_table_rank():
+    out = qac("camera bag for c", lookup, max_len=12, n=10, rerank=lambda rows: [1.0] * len(rows))
+    assert [(c["completion"], c["rank"], c["l1_rank"]) for c in out["l2"]["items"]] == [("camera bag for canon", 2, 1)]
+
+
 def test_qac_l2_timeout_and_error_fall_back_to_l1_without_items():
     def slow(rows):
         raise TimeoutError
