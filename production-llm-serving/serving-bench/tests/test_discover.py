@@ -298,6 +298,7 @@ def test_recommends_the_smallest_gpu_that_fits():
     recommended = [o["target"] for o in options if o["recommended"]]
     assert recommended == ["GPU_SMALL"]
     assert "recommended" in to_markdown(options)
+    assert not any("recommended" in o["reason"] for o in options if not o["recommended"])
 
 
 def test_gated_model_without_config_still_finds_pt_ppt_and_reports_size():

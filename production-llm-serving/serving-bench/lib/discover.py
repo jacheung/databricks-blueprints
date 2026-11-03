@@ -131,7 +131,9 @@ def custom_options(task: str, hf: dict, context: int, shapes: dict, cloud: str, 
         fit = classify(required, 1, memory, 0.9)
         viable = fit["status"] != "unsupported"
         needs = f"~{required / GIB:.1f} GiB" + (f" ({estimate})" if estimate else "")
-        reason = f"1x {gpu} {memory}GB: needs {needs}, {fit['utilization_percent']}% of usable VRAM ({fit['status']})"
+        # The estimator's "recommended" means a comfortable fit; here only the smallest fit is recommended
+        status = "fits" if fit["status"] == "recommended" else fit["status"]
+        reason = f"1x {gpu} {memory}GB: needs {needs}, {fit['utilization_percent']}% of usable VRAM ({status})"
         if viable and hf["config"] is None:
             viable = False
             reason += "; needs Hugging Face access to this gated repo to deploy"
