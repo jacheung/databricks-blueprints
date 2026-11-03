@@ -127,6 +127,13 @@ def test_every_table_key_used_by_a_notebook_is_in_the_config(cfg):
     assert used <= set(cfg["tables"]), f"missing from config tables: {sorted(used - set(cfg['tables']))}"
 
 
+def test_serp_l2_training_settings(cfg):
+    s = cfg["models"]["serp_l2"]
+    assert s["candidates"] == cfg["ai_search"]["serp_l1_k"]  # L2 reranks everything L1 returns
+    assert s["train_searches"] > s["eval_searches"] > 0 and s["valid_days"] > 0
+    assert str(s["ai_env"]) == "6"  # UCDataset (Beta) runs on AI environment v6
+
+
 def test_l2_endpoints_are_route_optimized(cfg):
     assert all(cfg["models"][m]["route_optimized"] is True for m in ("qac_l2", "serp_l2", "query_embedding"))
 

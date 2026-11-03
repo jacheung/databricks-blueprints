@@ -24,6 +24,10 @@ QAC_L2_REQUEST_COLUMNS = (*QAC_L2_CANDIDATE_COLUMNS, "is_guest")
 SERP_INDEX_PK = "product_id"
 SERP_INDEX_TEXT = "search_text"    # title + brand; embedded and keyword-matched, not returned
 SERP_INDEX_COLUMNS = (SERP_INDEX_PK, "title", "brand", "category", "price")
+# What the SERP L2 endpoint takes per candidate (its RequestSource features): where L1 put it (1-based rank, hybrid
+# score) and the index row's fields. `product_id` is sent too, as the item-feature lookup key the endpoint strips.
+SERP_L2_CANDIDATE_COLUMNS = ("l1_rank", "l1_score", "price", "brand", "category")
+SERP_L2_REQUEST_COLUMNS = (*SERP_L2_CANDIDATE_COLUMNS, "is_guest")
 
 
 # Prefix keys: the table build normalizes completions with `normalize`; the app looks up `lookup_prefix(typed)`.
@@ -47,3 +51,10 @@ def qac_l2_records(rows: list[dict], session_id: str, user_id: str | None) -> li
     """QAC L2 endpoint `dataframe_records` for L1 rows: lookup keys plus each row's candidate fields."""
     return [{"session_id": session_id, "user_id": user_id, "l1_rank": r["rank"],
              **{c: r[c] for c in QAC_L2_CANDIDATE_COLUMNS[1:]}, "is_guest": int(user_id is None)} for r in rows]
+
+
+def serp_l2_records(hits: list[dict], session_id: str, user_id: str | None) -> list[dict]:
+    """SERP L2 endpoint `dataframe_records` for index hits in L1 order (`SERP_INDEX_COLUMNS` plus the index `score`)."""
+    return [{"session_id": session_id, "user_id": user_id, SERP_INDEX_PK: h[SERP_INDEX_PK], "l1_rank": i,
+             "l1_score": h["score"], **{c: h[c] for c in SERP_L2_CANDIDATE_COLUMNS[2:]},
+             "is_guest": int(user_id is None)} for i, h in enumerate(hits, start=1)]

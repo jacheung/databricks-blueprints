@@ -1,7 +1,7 @@
 from rts_shared.retrieval import (QAC_COMPLETION_FEATURES, QAC_L2_CANDIDATE_COLUMNS, QAC_L2_REQUEST_COLUMNS,
                                   QAC_PREFIX_COLUMNS, QAC_PREFIX_PK, SERP_INDEX_COLUMNS,
-                                  SERP_INDEX_PK, SERP_INDEX_TEXT, filter_completions, lookup_prefix, normalize,
-                                  qac_l2_records)
+                                  SERP_INDEX_PK, SERP_INDEX_TEXT, SERP_L2_CANDIDATE_COLUMNS, SERP_L2_REQUEST_COLUMNS,
+                                  filter_completions, lookup_prefix, normalize, qac_l2_records, serp_l2_records)
 
 
 def test_qac_prefix_table_columns():
@@ -60,3 +60,25 @@ def test_qac_l2_records_send_keys_and_each_l1_rows_candidate_fields():
                         **{c: row[c] for c in QAC_L2_CANDIDATE_COLUMNS[1:]}, "is_guest": 1}]
     assert qac_l2_records([row], session_id="s1", user_id="u1")[0]["is_guest"] == 0
     assert set(records[0]) == {"session_id", "user_id", *QAC_L2_REQUEST_COLUMNS}
+
+
+def test_serp_l2_candidate_columns_come_from_the_index_row():
+    # The index row's fields, plus where L1 put it; product_id is a lookup key (item features), not a request field.
+    assert SERP_L2_CANDIDATE_COLUMNS[:2] == ("l1_rank", "l1_score")
+    assert set(SERP_L2_CANDIDATE_COLUMNS[2:]) <= set(SERP_INDEX_COLUMNS)
+    assert SERP_INDEX_PK not in SERP_L2_REQUEST_COLUMNS
+    assert SERP_L2_REQUEST_COLUMNS == (*SERP_L2_CANDIDATE_COLUMNS, "is_guest")
+
+
+def test_serp_l2_records_send_keys_and_each_hits_candidate_fields():
+    hits = [{"product_id": "B01", "title": "Sony bag", "brand": "sony", "category": "Camera & Photo", "price": 40.0,
+             "score": 0.9},
+            {"product_id": "B02", "title": "Bag", "brand": None, "category": "Camera & Photo", "price": 12.0,
+             "score": 0.7}]
+    records = serp_l2_records(hits, session_id="s1", user_id=None)
+    # Hits arrive in L1 order; rank is 1-based like the QAC table. The endpoint strips the keys before the model.
+    assert records[0] == {"session_id": "s1", "user_id": None, "product_id": "B01", "l1_rank": 1, "l1_score": 0.9,
+                          "price": 40.0, "brand": "sony", "category": "Camera & Photo", "is_guest": 1}
+    assert records[1]["l1_rank"] == 2 and records[1]["brand"] is None
+    assert serp_l2_records(hits, session_id="s1", user_id="u1")[0]["is_guest"] == 0
+    assert set(records[0]) == {"session_id", "user_id", SERP_INDEX_PK, *SERP_L2_REQUEST_COLUMNS}

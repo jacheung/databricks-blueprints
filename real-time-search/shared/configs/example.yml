@@ -167,9 +167,14 @@ models:
     scale_to_zero_enabled: false     # can't be stopped, only deleted: delete it when not testing
   serp_l2:
     registered_name: serp_ranker_dcnv2
+    train_searches: 10000            # sampled train-split searches x the L1 top `candidates` (serp_l2_training_set)
+    eval_searches: 5000              # sampled test-split searches for L1 vs LightGBM vs DCNv2
+    valid_days: 3                    # the last train days validate (early stopping)
+    candidates: 200                  # L2 reranks everything L1 returns (ai_search.serp_l1_k)
+    ai_env: "6"                      # Serverless GPU AI environment for training; UCDataset (Beta) needs v6
     endpoint: rts-serp-l2
     route_optimized: true            # lower per-request overhead; callers need an endpoint-scoped OAuth token
-    workload_type: GPU_SMALL         # T4; 06_serp_l2_dcnv2 also benchmarks a CPU variant
+    workload_type: GPU_SMALL         # T4; the CPU variant is benchmarked on a temporary endpoint
     workload_size: Small
     scale_to_zero_enabled: false
 
