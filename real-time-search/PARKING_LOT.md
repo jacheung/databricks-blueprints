@@ -71,3 +71,14 @@ question.
 - **Business-logic blend:** margin and inventory boosts applied after L2 in the app, not in the model.
 - **Dynamic facets** on the SERP.
 - **SERP index text variants:** compare recall@200 for title + brand (current) vs + category, and gte vs qwen3-embedding (the latter wants a query-side instruction prefix that managed embeddings don't add). Deferred 2026-11-02 to get end-to-end first.
+
+---
+
+## 7 — Realistic search sequences in the clickstream simulator
+
+**What:** `rts_data.datagen` draws each search's query independently, with replacement, from the intent's popularity-weighted pool. For niche brands that pool is a few queries, so sessions often repeat one query (4 of 6 old demo scenarios searched the same query 4x). Real sessions refine (broad → brand → specific), rarely repeat back to back, and brand shoppers still click other brands. Fix: draw without replacement within a session, add a broad → brand → specific path, soften `BRAND_BOOST`, and rank `TOP_BRANDS` by demand instead of product count.
+
+**Why deferred:** it regenerates the clickstream, so features, the QAC table, QAC L2 training and evaluation all rerun (data + ml tracks). The demo was fixed by stricter scenario selection instead (data/PLAN.md, 2026-11-03).
+
+**Entry points:** `data/src/rts_data/datagen.py` (`simulate`, `Catalog.build`), its tests, then the clickstream job and the ml track's QAC notebooks.
+

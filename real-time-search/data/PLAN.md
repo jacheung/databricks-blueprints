@@ -52,3 +52,9 @@ Update this file, plus this track's one status line in the top-level file, at th
 
 ### Step 4: Demo scenarios (the app replays them; see [app/PLAN.md](../app/PLAN.md))
 - [x] `demo_scenarios` (data, `demo_job`): 6 scenarios (3 logged-in, 3 guests), synced to `demo_scenarios_online`
+- [x] Stricter scenario selection (2026-11-03, rerun green): the old picks repeated one query 4x in 4 of 6 scenarios
+  (the simulator draws each query independently with replacement, and ranking by brand clicks favoured repeaters),
+  and 3 of 6 next queries were repeats. Now: 3+ distinct earlier searches, none repeated back to back, a next query not
+  searched earlier and in the intent category; 688 of 2,849 test candidates pass (20 categories). New picks: Canon,
+  Always, Kohler, Nike, Beats, REVLON. Left as is: 2 non-adjacent repeats (sc3, sc6); next queries name the brand only in
+  sc4/sc5; brand shoppers click almost only their brand (`BRAND_BOOST`). Simulator realism: PARKING_LOT

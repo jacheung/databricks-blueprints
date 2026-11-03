@@ -8,9 +8,12 @@
 # MAGIC (`rts_shared.scenarios`). The app replays a scenario to Kafka under a fresh session id; the features and
 # MAGIC rankings the demo shows are computed live from those events.
 # MAGIC
-# MAGIC Selection: the session's intent has a brand; before its last search it has 2+ searches, 3+ clicks and at least
-# MAGIC one click on the intent brand. One scenario per intent category, half from logged-in users (user features
-# MAGIC apply) and half from guests. The table is synced to Lakebase (snapshot) so the app reads it with the QAC table.
+# MAGIC Selection: the session's intent has a brand; before its last search it has 3+ distinct searches with no query
+# MAGIC repeated back to back, 3+ clicks and at least one click on the intent brand; its last search is a query not
+# MAGIC searched earlier in the session, in the intent category (so the demo shows L2 generalising from intent, not
+# MAGIC replaying a repeat). The simulator draws each query independently, so many sessions repeat one query; those
+# MAGIC also collect the most brand clicks, which is why repeats are excluded before ranking by brand clicks. One
+# MAGIC scenario per intent category, half from logged-in users (user features apply) and half from guests. The table is synced to Lakebase (snapshot) so the app reads it with the QAC table.
 # MAGIC
 # MAGIC Reruns are safe: the table is overwritten and re-synced.
 # MAGIC
@@ -60,18 +63,27 @@ sessions = (spark.table(table(CFG, "sim_sessions"))
 events = (spark.table(table(CFG, "session_events")).drop("user_id")
           .join(sessions.select("session_id"), "session_id"))
 last_search = (events.where("event_type = 'search'").groupBy("session_id")
-               .agg(F.max_by("query", "event_time").alias("next_query"), F.max("event_time").alias("cut")))
+               .agg(F.max_by("query", "event_time").alias("next_query"),
+                    F.max_by("category", "event_time").alias("next_category"), F.max("event_time").alias("cut")))
 before = (events.join(last_search, "session_id").where(F.col("event_time") < F.col("cut"))
           .join(sessions, "session_id"))
+searches = (before.where("event_type = 'search'")
+            .withColumn("prev_query", F.lag("query").over(Window.partitionBy("session_id").orderBy("event_time"))))
+search_stats = (searches.groupBy("session_id")
+                .agg(F.count_distinct("query").alias("distinct_queries"),
+                     F.count_if(F.col("query") == F.col("prev_query")).alias("repeats"),
+                     F.count_if(F.col("query") == F.col("next_query")).alias("next_seen")))
 candidates = (before.groupBy("session_id", "user_id", "intent_category", "intent_brand", "intent_price_target",
-                             "next_query")
+                             "next_query", "next_category")
               .agg(F.count_if(F.col("event_type") == "search").alias("searches"),
                    F.count_if(F.col("event_type") == "click").alias("clicks"),
                    F.count_if((F.col("event_type") == "click")
                               & (F.lower("brand") == F.lower("intent_brand"))).alias("brand_clicks"),
                    F.count_if((F.col("event_type") == "click")
                               & (F.col("category") == F.col("intent_category"))).alias("category_clicks"))
-              .where("searches >= 2 AND clicks >= 3 AND brand_clicks >= 1"))
+              .join(search_stats, "session_id")
+              .where("distinct_queries >= 3 AND repeats = 0 AND next_seen = 0 AND next_category = intent_category "
+                     "AND clicks >= 3 AND brand_clicks >= 1"))
 # The strongest session per (intent category, logged in or not).
 best = (candidates.withColumn("logged_in", F.col("user_id").isNotNull())
         .withColumn("r", F.row_number().over(Window.partitionBy("intent_category", "logged_in")
