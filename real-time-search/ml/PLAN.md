@@ -145,7 +145,10 @@ Design agreed 2026-11-03 (plan: ~/.claude/plans/streamed-fluttering-turing.md):
   2.11+cu130, A10G; `databricks-feature-engineering` 0.18.2 imports; `SerpRanker` moves to CUDA and scores within
   1e-6 of CPU. **UCDataset: `databricks-uc-dataset==0.0.1b1` isn't on the package index ("from versions: none")**, so
   training reads the table into memory (the user, 2026-11-03: UCDataset is nice to have; single node, small data)
-- [ ] `serp_l1_candidates`: hybrid top 200 per sampled query in Delta; recall@200 within 0.02 of 0.876
+- [x] `serp_l1_candidates` (run `40665446723268`, 2026-11-03): 10,000 train + 5,000 test engaged searches
+  (`serp_l2_searches`) cover only **3,675 distinct queries** (popularity-weighted); every one returned the full 200,
+  no duplicates or rank gaps: 735,000 rows in `serp_l1_candidates`. Recall of Exact products on the 1,931 test queries
+  with Exact labels: @50 0.733 / @100 0.821 / @200 **0.877** (step 3: 0.876 on uniform queries)
 - [ ] Training set, DCNv2, `fe.log_model`; NDCG@10 lift over L1 (and LightGBM)
 - [ ] Endpoint `rts-serp-l2` (GPU_SMALL, route-optimized) serves with online lookups
 - [ ] CPU vs GPU latency at 200/500 candidates

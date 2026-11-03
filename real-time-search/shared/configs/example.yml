@@ -105,6 +105,8 @@ tables:                            # short names; full name is catalog.schema.<n
   qac_prefix_completions: qac_prefix_completions
   qac_prefix_online: qac_prefix_completions_online   # Lakebase synced copy, also schema.<name> in Postgres
   products_search: products_search   # SERP index source: contract columns + search_text, CDF on
+  serp_l2_searches: serp_l2_searches   # engaged searches sampled for SERP L2 (serp_l1_candidates)
+  serp_l1_candidates: serp_l1_candidates   # hybrid top serp_l1_k per sampled query: query_id, rank, product_id, score
   demo_scenarios: demo_scenarios     # replayable starts of test-split sessions (demo_scenarios notebook)
   demo_scenarios_online: demo_scenarios_online   # Lakebase synced copy the app reads
   session_events_ingest: session_events_ingest   # Kafka topic copy kept by the Stream; training history for session features

@@ -7,10 +7,17 @@ resources:
         - name: config_path
           default: ${workspace.file_path}/shared/configs/${bundle.target}.yml
       environments:
+        - environment_key: serverless
+          spec:
+            client: "4"
         - environment_key: gpu   # DCNv2 trains and is logged on Serverless GPU (AI env = models.serp_l2.ai_env)
           spec:
             base_environment: workspace-base-environments/databricks_ai_v6
       tasks:
+        - task_key: serp_l1_candidates
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/serp_l1_candidates.py
         - task_key: serp_l2_gpu_check
           environment_key: gpu
           compute:
