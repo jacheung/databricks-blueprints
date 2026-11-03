@@ -112,12 +112,19 @@ def search(q: str, embed: Callable[[str], list[float]], query_index: Callable[..
             "timings_ms": {"embed": round((t_embed - t) * 1000, 2), "search": round((t_search - t_embed) * 1000, 2)}}
 
 
-def play_scenario(scenario: dict, session_id: str, producer, topic: str, now: datetime) -> int:
-    """Produce a scenario's events to Kafka as a new session; returns how many were sent."""
+def play_scenario(scenario: dict, session_id: str, producer, topic: str, now: datetime) -> list[dict]:
+    """Produce a scenario's events to Kafka as a new session; returns the events sent."""
     events = replay(json.loads(scenario["events"]), session_id, scenario["user_id"], now)
     for e in events:
         key, value = event_payload(e)
         producer.produce(topic, key=key, value=value)
     if producer.flush(10):
         raise RuntimeError("Kafka producer did not deliver every event within 10 s")
-    return len(events)
+    return events
+
+
+def scenario_timeline(events: list[dict]) -> list[dict]:
+    """Replayed events for the UI, timed in seconds before the last one (as the session features saw them)."""
+    last = events[-1]["event_time"]
+    return [{"t_s": round((e["event_time"] - last).total_seconds(), 1),
+             **{f: e[f] for f in ("event_type", "query", "product_id", "category", "brand", "price")}} for e in events]

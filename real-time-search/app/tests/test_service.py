@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from rts_app.service import index_query, latency_stats, play_scenario, qac, rows_to_dicts, search, time_calls, with_timeout
+from rts_app.service import (index_query, latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search,
+                             time_calls, with_timeout)
 from rts_shared.events import EVENT_FIELDS
 
 TABLE = {
@@ -57,11 +58,20 @@ SCENARIO = {"scenario_id": "sc1", "user_id": "u42", "events": json.dumps([
 
 def test_play_scenario_produces_every_event_under_the_new_session_and_flushes():
     p = FakeProducer()
-    n = play_scenario(SCENARIO, "demo-abc", p, "topic1", now=datetime(2026, 11, 2, tzinfo=timezone.utc))
-    assert n == 2 and p.flushed
+    sent = play_scenario(SCENARIO, "demo-abc", p, "topic1", now=datetime(2026, 11, 2, tzinfo=timezone.utc))
+    assert len(sent) == 2 and p.flushed
     assert [(t, k) for t, k, _ in p.sent] == [("topic1", b"demo-abc")] * 2
     assert all(set(v) == {f for f, _ in EVENT_FIELDS} and v["session_id"] == "demo-abc" for _, _, v in p.sent)
     assert p.sent[1][2]["user_id"] == "u42" and p.sent[1][2]["event_type"] == "click"
+
+
+def test_scenario_timeline_shows_what_was_replayed_relative_to_the_last_event():
+    sent = play_scenario(SCENARIO, "demo-abc", FakeProducer(), "topic1", now=datetime(2026, 11, 2, tzinfo=timezone.utc))
+    assert scenario_timeline(sent) == [
+        {"t_s": -0.9, "event_type": "search", "query": "canon lens", "product_id": None, "category": "Camera & Photo",
+         "brand": None, "price": None},
+        {"t_s": 0.0, "event_type": "click", "query": "canon lens", "product_id": "B01", "category": "Camera & Photo",
+         "brand": "canon", "price": 450.0}]
 
 
 VEC = [0.1, 0.2]

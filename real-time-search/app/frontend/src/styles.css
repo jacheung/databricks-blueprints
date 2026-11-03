@@ -4,6 +4,14 @@
   background: #fafafa;
 }
 main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+.page { display: grid; grid-template-columns: 1fr minmax(0, 960px) 1fr; }
+.page > main { width: 100%; box-sizing: border-box; margin: 2rem 0; }
+aside { justify-self: end; width: 100%; max-width: 22rem; padding: 2rem 0 0 1rem; box-sizing: border-box; }
+aside .timeline { position: sticky; top: 1rem; }
+@media (max-width: 1500px) {
+  .page { grid-template-columns: minmax(0, 960px); justify-content: center; }
+  aside { order: 2; max-width: none; padding: 0 1rem 2rem; }
+}
 h1 { font-size: 1.5rem; margin-bottom: 1rem; }
 h2 { font-size: 1.05rem; margin: 0; }
 .scenario { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin-bottom: 1.25rem; }
@@ -33,3 +41,14 @@ li.change-new { background: #e3f4e8; }
 .badge.up { color: #0b5cad; background: #d6e8fb; }
 .badge.down { color: #5c6670; background: #eceef0; }
 .badge.new { color: #12672f; background: #c6ebd2; }
+.badge.intent { color: #6b3fa0; background: #ece3f7; font-weight: 500; }
+.timeline { background: #fff; border: 1px solid #e3e6ea; border-radius: 8px; padding: 0.7rem 1rem; margin-bottom: 1rem; }
+.intent { font-size: 0.9rem; margin: 0 0 0.4rem; }
+.timeline ol { list-style: none; padding: 0; margin: 0; font-size: 0.82rem; }
+.event { display: grid; grid-template-columns: 3.5rem 3.5rem 1fr; margin: 0.1rem 0; padding: 0.1rem 0.35rem; }
+.event .t { color: #5c6670; text-align: right; padding-right: 0.6rem; font-variant-numeric: tabular-nums; }
+.event .kind { font-weight: 600; }
+.event.search .kind { color: #0b5cad; }
+.event.click .kind { color: #6b3fa0; }
+.event.add_to_cart .kind { color: #12672f; }
+.event.next { border-bottom: 1px dashed #c9ced4; margin-bottom: 0.3rem; padding-bottom: 0.3rem; }

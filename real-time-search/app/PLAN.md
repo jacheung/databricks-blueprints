@@ -16,6 +16,10 @@ Update this file, plus this track's one status line in the top-level file, at th
 3. Step 7: per-stage p50/p95 at typing pace (not only back-to-back) and the L2 fallback rate; HYBRID vs ANN.
 
 ## Open items
+- User history in the demo: half the scenarios are logged in and the simulator reuses a user's long-term intent in 70%
+  of their intent sessions, but scenarios aren't picked so user history matters, and nothing isolates its effect
+  (logged-in lift +0.068 vs guest +0.045 MRR is confounded). Check first: score a logged-in scenario's next query
+  with and without `user_id`; show user features only if the ranking changes.
 - Check the app's Lakebase SELECT survives a snapshot re-sync (synced tables may be recreated; default privileges are set).
 - Pay-per-token fallback in `/api/search` (when `rts-query-embedding` fails): kept for now, visible as
   `embedding: fallback_managed`. The user's call whether to fail instead.
@@ -78,6 +82,11 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
 - [ ] Streaming pipeline running during Play, so replayed events reach session features (then re-run the bench with a
   live session)
 - [ ] Demo: replayed scenarios flip the right column vs L1
+- [x] Intent timeline (2026-11-03, deployed; checked in the browser by the user): Play returns `timeline` (the replayed events, in
+  seconds before the last one; `scenario_timeline`, 1 test, 118 pass) and the scenario's planted `intent`. The UI shows
+  the intent first ("expect the session-aware column to lift completions that match it"), then the next query and
+  the events, newest first, in a left side column (below the page under 1500 px wide) so the search bar never moves.
+  Rows in both columns whose top category or most-clicked brand match the intent get a tag
 - [x] L2 diff in the UI (2026-11-03, deployed; checked in the browser by the user): each L2 item carries `l1_rank` (its position
   in L1 after filtering, not the table `rank`; 2 tests, 117 pass). The Session-aware column shows `▲n` / `▼n` /
   `NEW` (from below L1's shown top 10) per row, tints rows moved up or new, dims unchanged rows, and a summary

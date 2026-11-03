@@ -27,7 +27,8 @@ from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from rts_app.service import latency_stats, play_scenario, qac, rows_to_dicts, search, time_calls, with_timeout
+from rts_app.service import (latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search, time_calls,
+                             with_timeout)
 from rts_shared.config import full_name, load_config
 from rts_shared.kafka import producer as kafka_producer
 from rts_shared.lakebase import branch
@@ -190,9 +191,10 @@ def play(scenario_id: str):
     if scenario is None:
         raise HTTPException(404, f"no scenario {scenario_id}")
     session_id = f"demo-{uuid.uuid4().hex[:10]}"
-    n = play_scenario(scenario, session_id, producer(), CFG["kafka"]["topic"], datetime.now(timezone.utc))
-    return {"session_id": session_id, "user_id": scenario["user_id"], "events": n,
-            "next_query": scenario["next_query"]}
+    sent = play_scenario(scenario, session_id, producer(), CFG["kafka"]["topic"], datetime.now(timezone.utc))
+    return {"session_id": session_id, "user_id": scenario["user_id"], "events": len(sent),
+            "next_query": scenario["next_query"], "timeline": scenario_timeline(sent),
+            "intent": {k: scenario[f"intent_{k}"] for k in ("category", "brand", "price_target")}}
 
 
 _dist = ROOT / "app" / "frontend" / "dist"
