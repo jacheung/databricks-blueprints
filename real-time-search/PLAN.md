@@ -16,7 +16,7 @@ Read this file, then the plan for your track only.
 | Track | Worktree and branch | Status |
 |---|---|---|
 | app | this checkout, branch `real-time-search` (also the integration branch) | QAC L1 + L2 demo with the Under-the-hood panel and the L2 inputs bar; L2 moves rows vs L1 (seen by the user); next: live-session L2 bench, user-history check, then the SERP column |
-| ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 (step 6): model code + AI Runtime check done, L1 candidates next |
+| ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 (step 6): L1 candidates + training set built; DCNv2 training next |
 | data | no session; work from this checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
 
 **Rules for running tracks in parallel**
@@ -100,6 +100,7 @@ Checked by tests, not by sessions agreeing. Change one only under rule 1.
 | Online table names for the session features (session panel) | app | data | done by the app: found in Postgres database `main` (named after the catalog) via `pg_catalog` |
 | Possible train/serve skew: online `sess_last_event_type` is the last click/cart (2026-11-03: sc1 ends `back`, sc5 `search`, both online `click`), but `feature_specs` defines it over all events. Check what training saw | app | data, ml | open |
 | `rts-qac-l2` session lookups checked from the app via scenario Play | ml | app | open |
+| `sess_last_event_type` (`ColumnSelection`) includes the event at the label time; window counts exclude it. Intended? SERP L2 drops it; QAC can't be affected (constant in training) | ml | data | open |
 
 ## Where things are
 - Local code: this folder. Bundles deploy to `/Workspace/Users/jon.cheung@databricks.com/real-time-search/<bundle>/files/`

@@ -149,6 +149,19 @@ Design agreed 2026-11-03 (plan: ~/.claude/plans/streamed-fluttering-turing.md):
   (`serp_l2_searches`) cover only **3,675 distinct queries** (popularity-weighted); every one returned the full 200,
   no duplicates or rank gaps: 735,000 rows in `serp_l1_candidates`. Recall of Exact products on the 1,931 test queries
   with Exact labels: @50 0.733 / @100 0.821 / @200 **0.877** (step 3: 0.876 on uniform queries)
-- [ ] Training set, DCNv2, `fe.log_model`; NDCG@10 lift over L1 (and LightGBM)
+- [x] `serp_l2_training_set` (run `61490471803105`, 21 min, serverless CPU): spine 3,000,000 rows (15,000 searches
+  x 200) in `serp_l2_spine`; `create_training_set` with session/user/item lookups + `RequestSource` (`l1_rank`,
+  `brand`, `category`, `is_guest` reuse QAC's features: a RequestSource feature requires only its own column);
+  `model_matrix` (29 features) packed per search into `serp_l2_matrix`: train 9,061 / valid 939 (from 2026-10-12) /
+  test 5,000. Engaged product among the 200 candidates (L2 ceiling): **87.7%**. Real history per candidate row:
+  earlier search 47.9%, engaged session 34.6%, user 45.8% (guests 0%), item 18.4%. 24 rows (5 products with no
+  category) have no price; read as missing, as at serving
+  - Found with a feature diagnostic: **counts are 0, not null, without history** (the first run's "non-null share 1.0"
+    meant nothing), and **`sess_last_event_type` is always `search`**: `ColumnSelection` includes the event at the
+    label time while window counts exclude it (`sess_n_searches_30m` is 0 on first searches). It's constant in
+    training but the previous event at serving, so SERP drops it; `has_session` = an earlier search, `has_item` =
+    count > 0 (same input whether the online store returns 0 or null). QAC reads it too, but LightGBM never split on a
+    constant, so its scores can't move. Asked data (top-level cross-track table)
+- [ ] DCNv2 + LightGBM comparator, `fe.log_model`; NDCG@10 lift over L1
 - [ ] Endpoint `rts-serp-l2` (GPU_SMALL, route-optimized) serves with online lookups
 - [ ] CPU vs GPU latency at 200/500 candidates

@@ -18,11 +18,13 @@ COUNTS = ("sess_n_clicks_30m", "sess_n_carts_30m", "sess_n_searches_30m", "user_
           "item_clicks_7d", "item_carts_7d")
 PRICES = ("price", "sess_avg_price_30m", "sess_min_price_30m", "sess_max_price_30m", "sess_last_price",
           "user_median_price_30d")
-LAST_EVENT = {"search": "last_search", "click": "last_click", "add_to_cart": "last_add_to_cart"}
 GAPS = {"price_gap_session": "sess_avg_price_30m", "price_gap_user": "user_median_price_30d",
         "price_gap_last": "sess_last_price"}
-MODEL_COLUMNS = (*COUNTS, *(f"log_{c}" for c in PRICES), "sess_std_price_30m", *LAST_EVENT.values(),
-                 "has_session", "has_user", "has_item", "is_guest", "l1_log_rank", "l1_score",
+# Left out: `sess_last_event_type`. Training always sees the current search there (ColumnSelection includes the event
+# at the label time, counts don't), while serving sees whatever came before, so the model would score a value it never
+# saw vary. Being a guest is `is_guest`: user counts are 0, not null, for guests.
+MODEL_COLUMNS = (*COUNTS, *(f"log_{c}" for c in PRICES), "sess_std_price_30m",
+                 "has_session", "has_item", "is_guest", "l1_log_rank", "l1_score",
                  "sess_cat_share", "user_cat_share", "cat_is_last", "brand_is_last",
                  *GAPS, *(f"{g}_missing" for g in GAPS))
 
@@ -42,7 +44,8 @@ def add_crosses(df: pd.DataFrame) -> pd.DataFrame:
 
 def model_matrix(df: pd.DataFrame) -> pd.DataFrame:
     """Raw candidate rows -> float32 matrix in MODEL_COLUMNS order, no NaN: a neural net can't skip missing values,
-    so missing history reads as 0 plus a flag."""
+    so missing history reads as 0 plus a flag. Counts are 0 offline without history and may be null from the online
+    store, so flags test the filled values and both read the same."""
     x = add_crosses(df)
     out = pd.DataFrame(index=df.index)
     for c in COUNTS:
@@ -50,11 +53,8 @@ def model_matrix(df: pd.DataFrame) -> pd.DataFrame:
     for c in PRICES:
         out[f"log_{c}"] = np.log(x[c].astype(float).clip(lower=0.01)).fillna(0)
     out["sess_std_price_30m"] = np.log1p(x["sess_std_price_30m"].astype(float).fillna(0))
-    for event, column in LAST_EVENT.items():
-        out[column] = (x["sess_last_event_type"] == event).astype(float)
-    out["has_session"] = x["sess_last_event_type"].notna().astype(float)
-    out["has_user"] = x["user_n_clicks_30d"].notna().astype(float)
-    out["has_item"] = (x["item_clicks_7d"].notna() | x["item_carts_7d"].notna()).astype(float)
+    out["has_session"] = (out["sess_n_searches_30m"] > 0).astype(float)  # an earlier search in this session
+    out["has_item"] = ((out["item_clicks_7d"] > 0) | (out["item_carts_7d"] > 0)).astype(float)
     out["is_guest"] = x["is_guest"].astype(float)
     out["l1_log_rank"] = np.log(x["l1_rank"].astype(float))
     out["l1_score"] = x["l1_score"].astype(float).fillna(0)

@@ -29,14 +29,26 @@ def test_the_model_sees_numbers_only_with_no_nulls_and_no_identities():
 
 def test_missing_history_is_flagged_not_confused_with_zero():
     X = model_matrix(pd.concat([rows(), rows(**NO_HISTORY)])).reset_index(drop=True)
-    assert list(X["has_session"]) == [1, 0] and list(X["has_user"]) == [1, 0] and list(X["has_item"]) == [1, 0]
+    assert list(X["has_session"]) == [1, 0] and list(X["has_item"]) == [1, 0]
     assert list(X["price_gap_session_missing"]) == [0, 1]
     assert X.loc[1, "price_gap_session"] == 0
 
 
-def test_last_event_type_is_one_hot():
-    X = model_matrix(pd.concat([rows(sess_last_event_type="add_to_cart"), rows(sess_last_event_type=None)]))
-    assert X[["last_search", "last_click", "last_add_to_cart"]].values.tolist() == [[0, 0, 1], [0, 0, 0]]
+def test_no_history_reads_the_same_as_zero_counts():
+    # Offline, Feature View counts come back 0 without history; an online lookup of a missing key may return null.
+    zeros = {c: 0 for c in ("sess_n_searches_30m", "sess_n_clicks_30m", "sess_n_carts_30m", "sess_cat_cnt_30m",
+                            "user_n_clicks_30d", "user_n_carts_30d", "user_cat_cnt_30d", "item_clicks_7d",
+                            "item_carts_7d")}
+    X = model_matrix(pd.concat([rows(**NO_HISTORY), rows(**(NO_HISTORY | zeros))])).reset_index(drop=True)
+    assert X.loc[0].tolist() == X.loc[1].tolist() and X.loc[0, "has_session"] == 0 and X.loc[0, "has_item"] == 0
+
+
+def test_last_event_type_never_reaches_the_model():
+    # Training always sees the current search as the session's last event (ColumnSelection includes the event at the
+    # label time); at serving it is whatever came before. A value the model never saw varying must not be an input.
+    a, b = model_matrix(rows(sess_last_event_type="search")), model_matrix(rows(sess_last_event_type="click"))
+    assert a.values.tolist() == b.values.tolist()
+    assert not any("event_type" in c or c.startswith("last_") for c in MODEL_COLUMNS)
 
 
 def test_pack_group_orders_by_l1_rank_and_pads():

@@ -18,6 +18,12 @@ resources:
           environment_key: serverless
           notebook_task:
             notebook_path: ../notebooks/serp_l1_candidates.py
+        - task_key: serp_l2_training_set
+          depends_on:
+            - task_key: serp_l1_candidates
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/serp_l2_training_set.py
         - task_key: serp_l2_gpu_check
           environment_key: gpu
           compute:
