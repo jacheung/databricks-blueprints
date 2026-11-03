@@ -1,9 +1,11 @@
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import pytest
 
-from rts_app.service import index_query, play_scenario, qac, rows_to_dicts, search
+from rts_app.service import index_query, latency_stats, play_scenario, qac, rows_to_dicts, search, time_calls, with_timeout
 from rts_shared.events import EVENT_FIELDS
 
 TABLE = {
@@ -19,7 +21,7 @@ def lookup(prefix):
 def test_qac_returns_l1_and_falls_back_to_it_while_l2_is_not_deployed():
     out = qac("Ca", lookup, max_len=12, n=2)
     assert [c["completion"] for c in out["l1"]] == ["camera", "camera bag"]
-    assert out["l2"] == {"status": "not_deployed", "items": out["l1"]}
+    assert out["l2"] == {"status": "not_deployed"}  # the UI shows the L1 order; no duplicate list
     assert out["prefix"] == "ca" and out["timings_ms"]["l1"] >= 0
 
 
@@ -95,7 +97,7 @@ def test_search_embeds_on_our_endpoint_then_queries_the_index():
                  query_index=lambda **kw: calls.append(("index", kw)) or HITS, query_type="HYBRID", k=200,
                  query_columns=["search_text"])
     assert calls[0] == ("embed", "USB C") and calls[1][1]["query_vector"] == VEC
-    assert out["l1"] == HITS and out["l2"] == {"status": "not_deployed", "items": HITS}
+    assert out["l1"] == HITS and out["l2"] == {"status": "not_deployed"}
     assert out["embedding"] == "custom" and out["query_type"] == "HYBRID"
     assert set(out["timings_ms"]) == {"embed", "search"}
 
@@ -116,3 +118,54 @@ def test_search_skips_both_calls_for_blank_input():
     out = search("  ", embed=lambda t: pytest.fail("embedded"), query_index=lambda **kw: pytest.fail("searched"),
                  query_type="HYBRID", k=200, query_columns=[])
     assert out["l1"] == [] and out["embedding"] == "skipped"
+
+
+RANKED = {"ca": [{"rank": i, "completion": c} for i, c in enumerate(["camera", "camera bag", "cat food", "car seat"], 1)]}
+
+
+def test_qac_l2_reranks_the_top_candidates_and_shows_the_top_n():
+    sent = []
+    scores = {"camera": 0.1, "camera bag": 0.9, "cat food": 0.5}
+    out = qac("ca", lambda p: RANKED.get(p, []), max_len=12, n=2, candidates=3,
+              rerank=lambda rows: sent.append(rows) or [scores[r["completion"]] for r in rows])
+    assert [r["completion"] for r in sent[0]] == ["camera", "camera bag", "cat food"]  # L1 top 3 only
+    assert out["l2"]["status"] == "ok"
+    assert [c["completion"] for c in out["l2"]["items"]] == ["camera bag", "cat food"]
+    assert [c["completion"] for c in out["l1"]] == ["camera", "camera bag"]
+    assert out["timings_ms"]["l2"] >= 0
+
+
+def test_qac_l2_timeout_and_error_fall_back_to_l1_without_items():
+    def slow(rows):
+        raise TimeoutError
+
+    def broken(rows):
+        raise RuntimeError("endpoint 503")
+
+    for rerank, status in [(slow, "timeout"), (broken, "error")]:
+        out = qac("ca", lambda p: RANKED.get(p, []), max_len=12, n=2, candidates=3, rerank=rerank)
+        assert out["l2"] == {"status": status} and len(out["l1"]) == 2
+        assert "l2" in out["timings_ms"]
+
+
+def test_qac_l2_is_not_called_without_candidates():
+    out = qac("zz", lambda p: [], max_len=12, n=2, candidates=3, rerank=lambda rows: pytest.fail("called"))
+    assert out["l2"] == {"status": "ok", "items": []}
+
+
+def test_with_timeout_returns_fast_results_and_raises_on_slow_ones():
+    pool = ThreadPoolExecutor(max_workers=2)
+    assert with_timeout(pool, lambda: [1.0], timeout_s=1) == [1.0]
+    with pytest.raises(TimeoutError):
+        with_timeout(pool, lambda: time.sleep(0.2), timeout_s=0.01)
+
+
+def test_latency_stats_reports_nearest_rank_percentiles():
+    stats = latency_stats([float(x) for x in range(1, 101)])
+    assert stats == {"n": 100, "min": 1.0, "p50": 50.0, "p95": 95.0, "p99": 99.0, "max": 100.0}
+
+
+def test_time_calls_runs_n_times_after_warmup_and_returns_ms():
+    calls = []
+    times = time_calls(lambda: calls.append(1), n=5, warmup=2)
+    assert len(calls) == 7 and len(times) == 5 and all(t >= 0 for t in times)

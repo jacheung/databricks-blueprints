@@ -6,7 +6,7 @@ Update this file, plus this track's one status line in the top-level file, at th
 
 ## Status
 **Status as of 2026-11-03:** services resumed and checked (`check_query_embedding.py` OK, `rts-qac-l2` READY,
-`rts-vs-endpoint` ONLINE). `/api/search` deployed and verified as the app SP (below).
+`rts-vs-endpoint` ONLINE). `/api/search` deployed and verified as the app SP; QAC L2 wired with a 33 ms timeout (below).
 
 ## Next
 **Next (after resuming): app wiring.**
@@ -48,12 +48,31 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   200 hits. Single requests, indicative: ANN embed 79 / search 213 ms; HYBRID first request after restart embed 467
   (cold connection) / search 267 ms. Notebook-path search was p50 586 ms, so the app path looks far faster; step 7 confirms
 - [ ] UI search results column
-- [ ] Warm the embedding client at startup (first request paid ~400 ms of connection setup)
-- [ ] `l2.items` duplicates `l1` (200 products, ~2x payload): return status only while L2 isn't deployed
+- [x] Warm the embedding and QAC L2 clients at startup, in the background: the first search embedded in 78 ms
+  (was 467 ms)
+- [x] `l2` carries only its status unless reranked (was a duplicate of `l1`: 200 products, ~2x payload)
 
 ### Step 5: QAC L2 in the app (model and endpoint: [ml/PLAN.md](../ml/PLAN.md))
-- [ ] App: `/api/qac` calls L2 with the timeout and falls back to L1; serving-endpoint app resource; endpoint-scoped
-  OAuth token; the streaming pipeline must run for replayed events to reach features
+- [x] App: `/api/qac` calls L2 with the timeout and falls back to L1 (2026-11-03). `rts-qac-l2` app resource
+  (`CAN_QUERY`); L1 top 20 reranked, top 10 shown; status `ok` / `timeout` / `error` (no L2 items unless `ok`; the UI
+  shows L1). An unknown or missing session scores fine (same scores as no history), so L2 runs on every keystroke.
+  Every L2 call logs its full time (`qac_l2 call ... ms`), including calls that finish after the timeout
+  - **Latency from inside the app** (`/api/bench/qac_l2`, 100 back-to-back calls, no timeout):
+
+    | | min | p50 | p95 | p99 |
+    |---|---|---|---|---|
+    | guest, 1 / 20 candidates | 24.4 / 24.9 | 27.9 / 27.6 | 35.2 / 33.6 | 40.7 / 36.5 |
+    | session + user, 1 / 20 | 24.7 / 25.3 | 27.5 / 28.7 | 32.6 / 37.9 | 40.4 / 39.6 |
+
+    A ~25 ms floor per call; candidate count and key lookups add nothing measurable (caveat: the session pipeline was
+    stopped, so the session lookup likely missed). The cost is calling an endpoint, not the model or features
+  - Timeout 25 → **33 ms** (the user, option A): 40 ms QAC budget - L1 ~7 ms. The timeout enforces the budget; L2
+    shows on ~p90 of keystrokes. Rejected: scoring in the app with direct Lakebase lookups (removes the hop, but splits
+    the shared feature definition); keeping 25 ms (L2 almost never shows)
+  - Typing-pace calls measured 32–56 ms (3 calls) vs ~28 ms back-to-back; idle connections may cost more. Step 7
+    measures at typing pace and reports the fallback rate
+- [ ] Streaming pipeline running during Play, so replayed events reach session features (then re-run the bench with a
+  live session)
 - [ ] Demo: replayed scenarios flip the right column vs L1
 
 ### Step 7: Benchmark

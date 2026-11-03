@@ -4,6 +4,7 @@ const L2_STATUS = {
   not_deployed: "L2 not deployed: showing the L1 order",
   ok: "Reranked with live session features",
   timeout: "L2 timed out: showing the L1 order",
+  error: "L2 failed: showing the L1 order",
 };
 
 function Column({ title, subtitle, items, note }) {
@@ -55,6 +56,7 @@ export default function App() {
     const t = setTimeout(() => {
       const params = new URLSearchParams({ q });
       if (session) params.set("session_id", session.session_id);
+      if (session?.user_id) params.set("user_id", session.user_id);
       fetch(`/api/qac?${params}`)
         .then((r) => r.json())
         .then((res) => seq === latest.current && setResult(res)); // drop responses to older keystrokes
@@ -77,7 +79,7 @@ export default function App() {
   }
 
   const l1 = result?.l1 ?? [];
-  const l2 = result?.l2 ?? { status: "not_deployed", items: [] };
+  const l2 = result?.l2 ?? { status: "not_deployed" };
 
   return (
     <main>
@@ -120,6 +122,7 @@ export default function App() {
       {result && (
         <p className="timing">
           prefix “{result.prefix}” · L1 lookup {result.timings_ms.l1} ms
+          {result.timings_ms.l2 !== undefined && ` · L2 ${result.timings_ms.l2} ms`}
         </p>
       )}
 
@@ -128,7 +131,7 @@ export default function App() {
         <Column
           title="Session-aware"
           subtitle="L1 + L2: reranked with clickstream features"
-          items={l2.items}
+          items={l2.items ?? l1}
           note={L2_STATUS[l2.status] ?? l2.status}
         />
       </div>

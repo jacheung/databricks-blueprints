@@ -26,6 +26,11 @@ resources:
           serving_endpoint:
             name: rts-query-embedding
             permission: CAN_QUERY
+        - name: qac-l2
+          description: QAC L2 reranker (CPU, route-optimized)
+          serving_endpoint:
+            name: rts-qac-l2
+            permission: CAN_QUERY
         - name: serp-index
           description: SERP L1 hybrid index over products
           uc_securable:

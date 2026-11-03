@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 import time
+from concurrent.futures import Executor
+from concurrent.futures import TimeoutError as FutureTimeout
 from datetime import datetime
 from typing import Callable
 
@@ -12,16 +15,63 @@ from rts_shared.retrieval import filter_completions, lookup_prefix
 from rts_shared.scenarios import replay
 
 
-def qac(typed: str, prefix_rows: Callable[[str], list[dict]], max_len: int, n: int) -> dict:
-    """L1 completions for what was typed, and the L2 column: the L1 order until a QAC L2 endpoint exists."""
+def qac(typed: str, prefix_rows: Callable[[str], list[dict]], max_len: int, n: int,
+        rerank: Callable[[list[dict]], list[float]] | None = None, candidates: int = 20) -> dict:
+    """L1 completions for what was typed, and the L2 column: L1's top `candidates` reranked by `rerank` (scores in
+    row order). Without an `ok` status the L2 column carries no items and the UI shows the L1 order."""
     prefix = lookup_prefix(typed, max_len)
     t = time.perf_counter()
     rows = prefix_rows(prefix) if prefix.strip() else []
     if len(lookup_prefix(typed, len(typed))) > max_len:
         rows = filter_completions(rows, typed)
-    l1 = rows[:n]
-    return {"prefix": prefix, "l1": l1, "l2": {"status": "not_deployed", "items": l1},
-            "timings_ms": {"l1": round((time.perf_counter() - t) * 1000, 2)}}
+    t_l1 = time.perf_counter()
+    timings = {"l1": round((t_l1 - t) * 1000, 2)}
+    if rerank is None:
+        l2 = {"status": "not_deployed"}
+    elif not rows:
+        l2 = {"status": "ok", "items": []}
+    else:
+        pool = rows[:candidates]
+        try:
+            scores = rerank(pool)
+            order = sorted(range(len(pool)), key=lambda i: -scores[i])  # stable: ties keep the L1 order
+            l2 = {"status": "ok", "items": [pool[i] for i in order[:n]]}
+        except TimeoutError:
+            l2 = {"status": "timeout"}
+        except Exception:
+            l2 = {"status": "error"}
+        timings["l2"] = round((time.perf_counter() - t_l1) * 1000, 2)
+    return {"prefix": prefix, "l1": rows[:n], "l2": l2, "timings_ms": timings}
+
+
+def with_timeout(executor: Executor, fn: Callable[[], object], timeout_s: float):
+    """`fn()`, or TimeoutError after `timeout_s`. A slow call keeps running on its worker; its result is dropped."""
+    future = executor.submit(fn)
+    try:
+        return future.result(timeout=timeout_s)
+    except FutureTimeout:
+        future.cancel()
+        raise TimeoutError from None
+
+
+def time_calls(fn: Callable[[], object], n: int, warmup: int = 3) -> list[float]:
+    """Wall time in ms of `n` back-to-back `fn()` calls, after `warmup` untimed ones."""
+    for _ in range(warmup):
+        fn()
+    times = []
+    for _ in range(n):
+        t = time.perf_counter()
+        fn()
+        times.append((time.perf_counter() - t) * 1000)
+    return times
+
+
+def latency_stats(times_ms: list[float]) -> dict:
+    """Nearest-rank percentiles, rounded to 0.1 ms."""
+    xs = sorted(times_ms)
+    pct = lambda q: round(xs[max(0, math.ceil(q * len(xs)) - 1)], 1)
+    return {"n": len(xs), "min": round(xs[0], 1), "p50": pct(0.5), "p95": pct(0.95), "p99": pct(0.99),
+            "max": round(xs[-1], 1)}
 
 
 def index_query(text: str, vector: list[float] | None, query_type: str, k: int, query_columns: list[str]) -> dict:
@@ -44,11 +94,11 @@ def rows_to_dicts(columns: list[str], data_array: list[list] | None) -> list[dic
 def search(q: str, embed: Callable[[str], list[float]], query_index: Callable[..., list[dict]], query_type: str,
            k: int, query_columns: list[str]) -> dict:
     """SERP L1: embed on our endpoint, then query the index. If our endpoint fails, the index embeds the text itself
-    (pay-per-token), and `embedding` says so. The L2 column is the L1 order until a SERP L2 endpoint exists."""
+    (pay-per-token), and `embedding` says so. The L2 column carries only its status until SERP L2 exists."""
     text = q.strip()
     if not text:
         return {"query": text, "query_type": query_type, "embedding": "skipped", "l1": [],
-                "l2": {"status": "not_deployed", "items": []}, "timings_ms": {}}
+                "l2": {"status": "not_deployed"}, "timings_ms": {}}
     t = time.perf_counter()
     try:
         vector, embedding = embed(text), "custom"
@@ -58,7 +108,7 @@ def search(q: str, embed: Callable[[str], list[float]], query_index: Callable[..
     hits = query_index(**index_query(text, vector, query_type, k, query_columns))
     t_search = time.perf_counter()
     return {"query": text, "query_type": query_type, "embedding": embedding, "l1": hits,
-            "l2": {"status": "not_deployed", "items": hits},
+            "l2": {"status": "not_deployed"},
             "timings_ms": {"embed": round((t_embed - t) * 1000, 2), "search": round((t_search - t_embed) * 1000, 2)}}
 
 
