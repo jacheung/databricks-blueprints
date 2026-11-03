@@ -58,8 +58,15 @@ def sync_snapshot(w, cfg: dict, source: str, target: str, primary_key: list[str]
     return _wait_online(w, synced_name, timeout_s)
 
 
-def connect(w, cfg: dict):
-    """pg8000 connection as the current identity. Pure Python: native libpq drivers can abort Python on serverless."""
+def features_database(cfg: dict) -> str:
+    """The Postgres database holding the Feature Store online tables. The online store creates it on the shared
+    instance, named after the Unity Catalog catalog (`main`); synced tables live in `lakebase.database` instead."""
+    return cfg["unity_catalog"]["catalog"]
+
+
+def connect(w, cfg: dict, database: str | None = None):
+    """pg8000 connection as the current identity, to `database` (default `lakebase.database`). Pure Python: native
+    libpq drivers can abort Python on serverless."""
     import ssl
 
     import pg8000.native
@@ -68,5 +75,5 @@ def connect(w, cfg: dict):
                     if "READ_WRITE" in str(e.status.endpoint_type))
     token = w.postgres.generate_database_credential(endpoint=endpoint.name).token
     return pg8000.native.Connection(user=w.current_user.me().user_name, host=endpoint.status.hosts.host,
-                                    database=cfg["lakebase"]["database"], password=token,
+                                    database=database or cfg["lakebase"]["database"], password=token,
                                     ssl_context=ssl.create_default_context())
