@@ -1,0 +1,6 @@
+# Test runner for all packages. Bundles don't build wheels; notebooks put each src/ on sys.path.
+# Run from this folder: uv run --no-project --with pytest --with pyyaml --with pandas --with numpy --with lightgbm \
+#   --with scikit-learn --with mlflow-skinny --with databricks-sdk python -m pytest -q
+[tool.pytest.ini_options]
+pythonpath = ["shared/src", "data/src", "ml/src", "app/backend"]
+testpaths = ["shared/tests", "data/tests", "ml/tests", "app/tests"]

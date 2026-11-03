@@ -1,0 +1,29 @@
+# Simulated sessions -> Kafka Stream (history replayed) -> Feature Views, with point-in-time and freshness checks.
+resources:
+  jobs:
+    clickstream_job:
+      name: rts-clickstream
+      parameters:
+        - name: config_path
+          default: ${workspace.file_path}/shared/configs/${bundle.target}.yml
+        - name: rebuild_data             # true replaces session_events; run teardown_job first
+          default: "false"
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "4"
+      tasks:
+        - task_key: clickstream_sim
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/clickstream_sim.py
+        - task_key: kafka_stream
+          depends_on: [{task_key: clickstream_sim}]
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/kafka_stream.py
+        - task_key: feature_views
+          depends_on: [{task_key: kafka_stream}]
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/feature_views.py

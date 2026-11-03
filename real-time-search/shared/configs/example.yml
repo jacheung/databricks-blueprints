@@ -1,0 +1,189 @@
+# Sample config, committed for reference; copy it to shared/configs/<bundle target>.yml (e.g. dev.yml) and edit.
+# Real configs in this folder are gitignored. Every notebook, the app, and the tests read one config.
+# `auto` values are resolved at runtime by rts_shared.config.resolve_auto (preflight prints them).
+
+workspace:
+  profile: your-profile            # CLI profile for deploys; never auto-selected
+  host: https://your-workspace.cloud.databricks.com
+
+unity_catalog:
+  catalog: main                    # streaming Feature Views need a catalog on your own cloud storage
+  schema: your_schema
+  volume: raw                      # ESCI parquet lands in /Volumes/<catalog>/<schema>/raw
+
+data:
+  esci_locale: us
+  max_queries: 10000               # deterministic subset of ESCI queries for fast iteration; null = all (~97K)
+  classify_batch_rows: 2000        # rows per resumable ai_classify micro-batch (catalog_prep)
+  classify_parallelism: 32         # concurrent tasks calling ai_classify within each micro-batch
+  # Departments for ai_classify. The description tells the classifier where overlapping departments split;
+  # median_price seeds synthetic prices (ESCI has none).
+  classify_instructions: >-
+    Each input is a shopper's search query, or a product title, from Amazon US. Pick the single department a
+    shopper would browse to find what they are looking for. Accessories belong to the department of the device
+    they are for: "iphone case" is Cell Phones & Accessories, "camera bag" is Camera & Photo, "ps5 controller" is
+    Video Games. Inputs may contain typos, brand names, or model numbers.
+  categories:
+    Electronics:
+      median_price: 80
+      description: TVs, headphones, speakers, home audio, smart home devices, wearables, batteries, and chargers or cables not specific to phones, computers, or cameras
+    Computers & Accessories:
+      median_price: 60
+      description: Laptops, desktops, tablets, monitors, keyboards, mice, PC parts, storage drives, networking, printers and ink, computer cables and adapters
+    Cell Phones & Accessories:
+      median_price: 25
+      description: Phones, phone cases, screen protectors, phone chargers, phone mounts and holders
+    Camera & Photo:
+      median_price: 150
+      description: Cameras, lenses, tripods, camera bags, camera memory cards, camera drones, photo lighting, security cameras
+    Home & Kitchen:
+      median_price: 35
+      description: Cookware, kitchen appliances, furniture, bedding, home decor, storage and organization, vacuums and cleaning tools
+    Tools & Home Improvement:
+      median_price: 40
+      description: Power and hand tools, hardware, light fixtures and bulbs, electrical, plumbing, paint
+    Clothing, Shoes & Jewelry:
+      median_price: 30
+      description: Apparel, shoes, jewelry, watches, handbags, sunglasses, costumes
+    Beauty & Personal Care:
+      median_price: 15
+      description: Makeup, skincare, hair care and styling tools, fragrance, shaving, nail care
+    Health & Household:
+      median_price: 18
+      description: Vitamins and supplements, medicine, medical supplies, oral care, household cleaning products, paper goods, laundry
+    Sports & Outdoors:
+      median_price: 35
+      description: Exercise equipment, team sports gear, camping, hiking, cycling, fishing, hunting, water sports
+    Toys & Games:
+      median_price: 25
+      description: Toys, board and card games, puzzles, dolls, building sets, kids outdoor play
+    Baby:
+      median_price: 25
+      description: Diapers, strollers, car seats, nursery furniture, baby feeding, baby clothing
+    Pet Supplies:
+      median_price: 20
+      description: Pet food, treats, toys, beds, litter, aquariums, leashes and collars
+    Grocery & Gourmet Food:
+      median_price: 12
+      description: Food, snacks, drinks, coffee, tea, candy, cooking ingredients (not pet food)
+    Automotive:
+      median_price: 30
+      description: Car and motorcycle parts and accessories, car care, car electronics, tires
+    Office Products:
+      median_price: 15
+      description: Office and school supplies, paper, pens, binders, labels, desk organizers (printers and ink go to Computers & Accessories)
+    Arts, Crafts & Sewing:
+      median_price: 15
+      description: Art supplies, paint for art, craft supplies, yarn, fabric, sewing and scrapbooking
+    Books & Media:
+      median_price: 15
+      description: Books, ebooks, movies, TV shows, music, magazines
+    Video Games:
+      median_price: 40
+      description: Game consoles, video games, controllers, gaming headsets and accessories
+    Patio, Lawn & Garden:
+      median_price: 45
+      description: Gardening, plants and seeds, lawn mowers, grills, outdoor furniture, pest control
+  price_sigma: 0.6                 # lognormal spread around each category median
+  sim:
+    n_sessions: 200000
+    n_users: 20000                   # logged-in users, each with a long-term intent
+    logged_in_share: 0.6             # the rest are guest sessions (no user_id)
+    intent_session_share: 0.7        # the rest are no-intent sessions
+    mobile_share: 0.6
+    seed: 42
+    history_days: 45                 # simulated events cover the 45 days ending yesterday (relative to the clickstream_sim run)
+    test_days: 14                    # sessions in the last 14 of those days are the test set
+
+tables:                            # short names; full name is catalog.schema.<name>
+  products: products
+  queries: queries
+  labels: esci_labels
+  session_events: session_events   # simulated history, CDF on; user/item Feature View source
+  qac_impressions: qac_impressions
+  serp_impressions: serp_impressions
+  qac_prefix_completions: qac_prefix_completions
+  qac_prefix_online: qac_prefix_completions_online   # Lakebase synced copy, also schema.<name> in Postgres
+  products_search: products_search   # SERP index source: contract columns + search_text, CDF on
+  demo_scenarios: demo_scenarios     # replayable starts of test-split sessions (demo_scenarios notebook)
+  demo_scenarios_online: demo_scenarios_online   # Lakebase synced copy the app reads
+  session_events_ingest: session_events_ingest   # Kafka topic copy kept by the Stream; training history for session features
+  sim_sessions: sim_sessions         # planted intent per session; evaluation only, never a feature
+
+kafka:                             # session events for sub-second streaming features (kafka_stream, feature_views, app)
+  connection: your_rts_kafka         # UC Kafka connection; 02a creates it if missing
+  service_credential: your-msk-service-credential   # UC service credential for MSK IAM auth
+  bootstrap_servers: "b-1.your-msk.kafka.us-west-2.amazonaws.com:9198"
+  topic: your_rts_events             # kafka_stream creates it if missing
+  partitions: 6
+  stream: session_events_stream      # Feature Engineering Stream (catalog.schema.<name>) reading the topic
+
+feature_store:
+  online_store: rts-online-store   # Lakebase-backed; lowercase letters, digits, hyphens only
+  online_capacity: CU_1
+  session_window_minutes: 30
+  user_window_days: 30
+  item_window_days: 7
+  batch_cron: "0 0 * * * ?"        # hourly refresh for user/item sliding-window features
+  freshness_probes: 20             # single-event probes for the event -> online freshness check (feature_views)
+  freshness_warmup: 2              # first probes discarded from the percentiles
+
+lakebase:                          # QAC L1 prefix table, synced from Delta
+  instance: rts-online-store       # shared with the Feature Store online store
+  branch: production
+  database: databricks_postgres
+  qac_max_prefix_len: 12
+  qac_l1_k: 50
+  qac_min_ctr: 0.05                # completions engaged with less often are not served (qac.drop_dead_ends)
+
+ai_search:
+  endpoint: rts-vs-endpoint        # serp_l1_ai_search creates it (Standard) if missing; may name a shared endpoint
+  index: products_hybrid_idx
+  embedding_endpoint: databricks-gte-large-en
+  serp_l1_k: 200                   # hybrid returns at most 200 per call; more needs pagination
+  eval_queries: 1000               # sampled test-split queries with Exact labels, for recall@k
+
+models:
+  qac_l2:
+    registered_name: qac_ranker_lgbm
+    train_searches: 30000            # sampled train-split searches for the training set (qac_l2_lgbm)
+    eval_searches: 10000             # sampled test-split searches for the L1 vs L2 comparison
+    valid_days: 3                    # the last train days validate (early stopping)
+    prefix_lens: [1, 2, 3]           # prefixes typed per search; each is one ranking group
+    candidates: 20                   # L1 top-k reranked per prefix
+    endpoint: rts-qac-l2
+    route_optimized: true            # lower per-request overhead; callers need an endpoint-scoped OAuth token
+    workload_type: CPU
+    workload_size: Small
+    scale_to_zero_enabled: false
+  query_embedding:                 # SERP query vectors on a dedicated GPU (pay-per-token has a wide tail)
+    hf_name: Alibaba-NLP/gte-large-en-v1.5   # same model as ai_search.embedding_endpoint, so the index needs no rebuild
+    registered_name: gte_large_en_v1_5_raw   # raw (unnormalized) vectors, like pay-per-token; query_embedding_model logs it
+    ai_env: "5"                      # Serverless GPU AI environment for logging; GTE v1.5's remote code fails on v6
+    endpoint: rts-query-embedding
+    route_optimized: true            # callers need an OAuth token (the app's SP, or the SDK with a CLI OAuth login)
+    workload_type: GPU_SMALL         # T4
+    workload_size: Small
+    scale_to_zero_enabled: false     # can't be stopped, only deleted: delete it when not testing
+  serp_l2:
+    registered_name: serp_ranker_dcnv2
+    endpoint: rts-serp-l2
+    route_optimized: true            # lower per-request overhead; callers need an endpoint-scoped OAuth token
+    workload_type: GPU_SMALL         # T4; 06_serp_l2_dcnv2 also benchmarks a CPU variant
+    workload_size: Small
+    scale_to_zero_enabled: false
+
+app:
+  name: real-time-search
+  l2_enabled: {qac: true, serp: true}
+  timeouts_ms: {qac_l2: 25, serp_l2: 200}   # L2 slower than this falls back to the L1 order
+  qac_debounce_ms: 80
+  demo_scenarios: 6                 # half logged-in users, half guests; one intent category each
+
+budgets_ms: {qac_total_p95: 40, serp_total_p95: 400}
+
+mlflow:
+  experiment: auto                 # /Users/<current user>/real-time-search/experiments
+
+cleanup:
+  delete_endpoints: false

@@ -1,0 +1,7 @@
+shared/configs/*
+!shared/configs/example.yml
+.databricks/
+__pycache__/
+.pytest_cache/
+app/frontend/node_modules/
+app/frontend/dist/

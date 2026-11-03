@@ -1,0 +1,36 @@
+# L1 retrieval: QAC prefix table synced to Lakebase, SERP hybrid index over products.
+resources:
+  jobs:
+    retrieval_job:
+      name: rts-retrieval
+      parameters:
+        - name: config_path
+          default: ${workspace.file_path}/shared/configs/${bundle.target}.yml
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "4"
+        - environment_key: gpu   # custom models are logged on Serverless GPU (AI env = models.query_embedding.ai_env)
+          spec:
+            base_environment: workspace-base-environments/databricks_ai_v5
+      tasks:
+        - task_key: qac_l1_lakebase
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/qac_l1_lakebase.py
+        - task_key: serp_l1_ai_search
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/serp_l1_ai_search.py
+        - task_key: query_embedding_model
+          environment_key: gpu
+          compute:
+            hardware_accelerator: GPU_1xA10
+          notebook_task:
+            notebook_path: ../notebooks/query_embedding_model.py
+        - task_key: serp_query_embedding
+          depends_on:
+            - task_key: query_embedding_model
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/serp_query_embedding.py

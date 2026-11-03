@@ -1,0 +1,24 @@
+# Build the product catalog: check the workspace, then ESCI -> products, queries, esci_labels (ai_classify).
+resources:
+  jobs:
+    catalog_job:
+      name: rts-catalog
+      parameters:
+        - name: config_path
+          default: ${workspace.file_path}/shared/configs/${bundle.target}.yml
+        - name: reset_classification     # redo ai_classify from scratch
+          default: "false"
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "4"
+      tasks:
+        - task_key: preflight
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/preflight.py
+        - task_key: catalog_prep
+          depends_on: [{task_key: preflight}]
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/catalog_prep.py

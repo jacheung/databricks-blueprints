@@ -1,0 +1,24 @@
+# Data engineering bundle: catalog prep, clickstream, Kafka Stream, Feature Views.
+# Deploy from this folder: databricks bundle deploy -t dev -p <profile>
+bundle:
+  name: rts-data
+
+include:
+  - resources/*.yml
+
+sync:
+  paths:                             # sync root becomes real-time-search/, so files keep their repo layout
+    - .
+    - ../shared
+  include:
+    - ../shared/configs/*.yml        # gitignored per-target configs, uploaded anyway
+
+workspace:
+  root_path: /Workspace/Users/${workspace.current_user.userName}/real-time-search/data
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://e2-demo-field-eng.cloud.databricks.com
