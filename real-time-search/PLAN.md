@@ -14,7 +14,7 @@ Read this file, then the plan for your track only.
 | Track | Worktree and branch | Status |
 |---|---|---|
 | app | this checkout, branch `real-time-search` (also the integration branch) | `/api/search` coded and tested, not deployed; QAC L2 wiring next |
-| ml | worktree `../rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 (step 6) not started |
+| ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 (step 6) not started |
 | data | no session; work from this checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
 
 **Rules for running tracks in parallel**
@@ -87,8 +87,9 @@ Checked by tests, not by sessions agreeing. Change one only under rule 1.
 - Superseded but kept (the user chose to keep them for now; ask before deleting): the old flat files in
   `/Workspace/Users/jon.cheung@databricks.com/real-time-search/` (`00_*`–`02_*`, `common.py`, `configs/`, ...).
   `_scratch/` was deleted 2026-11-01. UC objects didn't move.
-- Worktrees: gitignored files (`shared/configs/dev.yml`) aren't in a new worktree. Its `dev.yml` is a symlink to this
-  checkout's, so there is one config.
+- Worktrees: gitignored files (`shared/configs/dev.yml`) aren't in a new worktree, so each has a **copy**. This
+  checkout's is the source of truth: change config here, then copy it to the worktree and redeploy the bundles that
+  read it. Check they match: `cmp shared/configs/dev.yml ~/GitHub/databricks-blueprints-rts-ml/real-time-search/shared/configs/dev.yml`.
 
 ## How we work
 - Tests first for local logic, from this folder: `uv run --no-project --with pytest --with pyyaml --with pandas --with numpy
@@ -102,6 +103,8 @@ Checked by tests, not by sessions agreeing. Change one only under rule 1.
 - Update your track's `PLAN.md` at the end of each step. Commit on your track's branch.
 
 ## Gotchas (all tracks)
+- Don't symlink `dev.yml` into a worktree: `bundle deploy` skips symlinks and **deletes** the deployed `dev.yml`
+  (2026-11-03: "1 deleted", then jobs had no config until a copy was redeployed).
 - On serverless, `psycopg` aborts Python (SIGABRT) while importing its native extension, intermittently, even with
   `[binary]`; serverless task retries hide it. Notebooks use `pg8000` (pure Python), or Spark SQL on the UC table.
 - The `e2-demo-fe` CLI token expires, and the IP ACL can block calls while off VPN.
