@@ -33,7 +33,7 @@ Read this file, then the plan for your track only.
 | `rts-vs-endpoint` + `products_hybrid_idx` (Standard; bills hourly) | ml | ONLINE (kept overnight: the workspace is at its 500-endpoint quota) |
 | `rts-query-embedding` (T4, route-optimized) | ml | READY since 2026-11-03 |
 | `rts-qac-l2` (CPU, route-optimized) | ml | READY since 2026-11-03 |
-| Session pipeline `b2e71ddb-8541-4ffa-8c4e-82ecbeca22da` (continuous) | data | Stopped; start only for scenario Play or freshness checks |
+| Session pipeline `b2e71ddb-8541-4ffa-8c4e-82ecbeca22da` (continuous) | data | **Running since 2026-11-03** (app freshness-bar and Play check); stop right after |
 | Lakebase `rts-online-store` (online store, QAC prefixes, demo scenarios) | data | Running |
 | App `rts-search` | app | Running (QAC L1 + L2, `/api/search`) |
 
@@ -74,7 +74,8 @@ Checked by tests, not by sessions agreeing. Change one only under rule 1.
 
 | Ask | From | To | State |
 |---|---|---|---|
-| Online table names for the session features (session panel) | app | data | open |
+| Online table names for the session features (session panel) | app | data | done by the app: found in Postgres database `main` (named after the catalog) via `pg_catalog` |
+| Possible train/serve skew: online `sess_last_event_type` is the last click/cart (2026-11-03: sc1 ends `back`, sc5 `search`, both online `click`), but `feature_specs` defines it over all events. Check what training saw | app | data, ml | open |
 | `rts-qac-l2` session lookups checked from the app via scenario Play | ml | app | open |
 
 ## Where things are

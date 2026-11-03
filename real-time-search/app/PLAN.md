@@ -82,6 +82,37 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
 - [ ] Streaming pipeline running during Play, so replayed events reach session features (then re-run the bench with a
   live session)
 - [ ] Demo: replayed scenarios flip the right column vs L1
+- [x] Latency and freshness bars (2026-11-03; freshness checked in the browser by the user with the pipeline on). QAC: a
+  stacked L1 + L2 bar, dashed marker at `budgets_ms.qac_total_p95` (40 ms), fixed 1.5x scale; server-side times only.
+  On a timeout the UI fetches the call's full time (`/api/qac/{request_id}/l2_time`, `RecentTimes`, 1 test) and draws
+  the overrun hatched past the budget, with "N ms over budget". Overrun drawing not yet checked in the browser.
+  Clickstream: after Play the UI polls `/api/sessions/{id}/freshness` (250 ms, gives up after 15 s) until the
+  session's online row holds every replayed search, click and cart, then shows Kafka ack (app-side, produce → all
+  acked) and stream → online store, on a 1 s scale. The lag is the row's `commit_time - event_time` (the data track's
+  freshness measure; `session_freshness`, 3 tests, 121 pass), so the poll interval doesn't change it. The online table
+  (`rts_session_online_<suffix>`) is looked up by its `sess_n_clicks_30m` column, since re-materializing renames it.
+  Found via `pg_catalog` (`information_schema` hides tables the role has no privilege on); the app SP reads it
+- [ ] End-to-end bars + session features (2026-11-03, deployed; browser check pending), modelled on the NBO
+  accelerator app. All in the side panel "Under the hood" (the user, 2026-11-03: less text under the search bar):
+  first "Clickstream → features" (Kafka write, app; Real-Time Mode, `output_time`; Lakebase write, `commit_time`; app
+  read) and "Keystroke → completions" (L1, L2, overrun), each a bar with one row per segment on one ms scale (the
+  40 ms budget line on the keystroke bar only), then planted intent and clickstream history. Keystroke axis fixed at
+  60 ms (the user: covers p99 end to end; slower ones clip with ▸); the clickstream bar fits its own total. Both bars and all their
+  rows render from page load with "–" and fill in on Play / the first keystroke, so the layout never shifts. Below the columns, a collapsed per-feature table: value,
+  in-Lakebase and read-by-app offsets. `/api/sessions/{id}/freshness` waits server-side, reading the 3 session tables every 10 ms until
+  each matches what Play sent (`expected_session_features`, `landed`, `freshness_breakdown`). Timing one event, like
+  the NBO app: the replay ends on its last click or cart (the only event that moves all 3 tables); Play sends the rest
+  untimed, then stamps and sends that click alone, so "Kafka write" is one event's ack. Before, it was the whole
+  replay's (55 ms) while the pipeline had output the row 30 ms in, so Real-Time Mode came out -25 ms. A table counts
+  as landed only when its row carries that event's event_time and was committed after it. Stages end at timestamps,
+  add up to the total, and are clamped at 0 (app vs pipeline clock); categories the timed click didn't touch show
+  "earlier event". Offsets are from the timed click; earlier events keep simulated past event_times. No "Before" column (Play starts a fresh
+  session). The online tables are in the Postgres database named after the catalog (`main`), not
+  `lakebase.database` (synced tables only): FE syncs each catalog's online tables into a database of that name (also
+  noted in the NBO repo's `pipelineTimes.ts`). The app has a second pool for it (`features_database`, 1 test);
+  `grants_job` now grants CONNECT/USAGE/SELECT in both databases and checks all 3 session tables (green 2026-11-03)
+- [ ] Databricks brand colors (2026-11-03, deployed): CSS tokens from the extended brand guide (navy/oat/white
+  surfaces, lava accents; L1 navy, L2 lava, timeout yellow, overrun maroon hatch); text pairs checked >= 4.5:1
 - [x] Intent timeline (2026-11-03, deployed; checked in the browser by the user): Play returns `timeline` (the replayed events, in
   seconds before the last one; `scenario_timeline`, 1 test, 118 pass) and the scenario's planted `intent`. The UI shows
   the intent first ("expect the session-aware column to lift completions that match it"), then the next query and

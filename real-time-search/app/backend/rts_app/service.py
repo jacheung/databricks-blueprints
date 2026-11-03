@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 import time
+from collections import OrderedDict
 from concurrent.futures import Executor
 from concurrent.futures import TimeoutError as FutureTimeout
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 from rts_shared.events import event_payload
@@ -112,15 +114,28 @@ def search(q: str, embed: Callable[[str], list[float]], query_index: Callable[..
             "timings_ms": {"embed": round((t_embed - t) * 1000, 2), "search": round((t_search - t_embed) * 1000, 2)}}
 
 
-def play_scenario(scenario: dict, session_id: str, producer, topic: str, now: datetime) -> list[dict]:
-    """Produce a scenario's events to Kafka as a new session; returns the events sent."""
+def play_scenario(scenario: dict, session_id: str, producer, topic: str, now: datetime,
+                  clock: Callable[[], datetime] | None = None) -> tuple[list[dict], float]:
+    """Produce a scenario's events to Kafka as a new session; returns the events sent and the last one's Kafka write
+    in ms. The replay ends on its last click or cart, the only event that moves all three session tables, so every
+    table's timestamps time that event. The rest is sent and flushed first, untimed; the last event is then stamped
+    at send time (`clock`) and sent alone, so the Kafka write is one event's, not the whole replay's."""
     events = replay(json.loads(scenario["events"]), session_id, scenario["user_id"], now)
-    for e in events:
+    engaged = [i for i, e in enumerate(events) if e["event_type"] in ENGAGED]
+    if engaged:
+        events = events[:engaged[-1] + 1]
+    for e in events[:-1]:
         key, value = event_payload(e)
         producer.produce(topic, key=key, value=value)
     if producer.flush(10):
         raise RuntimeError("Kafka producer did not deliver every event within 10 s")
-    return events
+    events[-1] = {**events[-1], "event_time": (clock or (lambda: datetime.now(timezone.utc)))()}
+    key, value = event_payload(events[-1])
+    t = time.perf_counter()
+    producer.produce(topic, key=key, value=value)
+    if producer.flush(10):
+        raise RuntimeError("Kafka producer did not deliver the last event within 10 s")
+    return events, round((time.perf_counter() - t) * 1000, 1)
 
 
 def scenario_timeline(events: list[dict]) -> list[dict]:
@@ -128,3 +143,106 @@ def scenario_timeline(events: list[dict]) -> list[dict]:
     last = events[-1]["event_time"]
     return [{"t_s": round((e["event_time"] - last).total_seconds(), 1),
              **{f: e[f] for f in ("event_type", "query", "product_id", "category", "brand", "price")}} for e in events]
+
+
+ENGAGED = ("click", "add_to_cart")
+# The session Feature Views' online tables, each named by a feature only it holds (data/src/rts_data/feature_specs.py).
+SESSION_TABLES = {"window": "sess_n_clicks_30m", "category": "sess_cat_cnt_30m", "last": "sess_last_event_type"}
+WINDOW_FEATURES = ("sess_n_searches_30m", "sess_n_clicks_30m", "sess_n_carts_30m", "sess_avg_price_30m",
+                   "sess_min_price_30m", "sess_max_price_30m", "sess_std_price_30m")
+LAST_FEATURES = ("sess_last_event_type", "sess_last_brand", "sess_last_category", "sess_last_price")
+
+
+def expected_session_features(events: list[dict]) -> dict:
+    """What each session table holds once every replayed event has landed, as the online tables show it."""
+    engaged = [e for e in events if e["event_type"] in ENGAGED]
+    categories = {}
+    for e in engaged:
+        if e["category"]:
+            categories[e["category"]] = categories.get(e["category"], 0) + 1
+    last = engaged[-1] if engaged else {}
+    return {"window": {"sess_n_searches_30m": sum(e["event_type"] == "search" for e in events),
+                       "sess_n_clicks_30m": sum(e["event_type"] == "click" for e in events),
+                       "sess_n_carts_30m": sum(e["event_type"] == "add_to_cart" for e in events)},
+            "category": categories,
+            # Observed online: every sess_last_* column, event type included, is the last click or cart, although
+            # feature_specs defines sess_last_event_type over all events (2026-11-03; flagged to data/ml).
+            "last": {"sess_last_event_type": last.get("event_type"), "sess_last_brand": last.get("brand"),
+                     "sess_last_category": last.get("category"), "sess_last_price": last.get("price")}}
+
+
+def landed(table: str, expected: dict, rows: list[dict], last_event_time: datetime) -> bool:
+    """Whether a session table's rows reflect every replayed event and were written for the timed last event (a
+    click or cart, so it moves every table): committed after it was stamped and, where the row records it, carrying
+    its event_time. Otherwise the row's timestamps would time an earlier event."""
+    def fresh(r):
+        return (r["commit_time"] >= last_event_time
+                and ("event_time" not in r or abs((r["event_time"] - last_event_time).total_seconds()) < 0.001))
+
+    want = expected[table]
+    if table == "category":
+        current = [r for r in rows if r["category"] == expected["last"]["sess_last_category"]]
+        return {r["category"]: r["sess_cat_cnt_30m"] for r in rows} == want and all(fresh(r) for r in current)
+    if len(rows) != 1 or not fresh(rows[0]):
+        return False
+    row = rows[0]
+    if table == "window":
+        return all(row[k] == v for k, v in want.items())
+    price = want["sess_last_price"]
+    return (all(row[k] == want[k] for k in ("sess_last_event_type", "sess_last_brand", "sess_last_category"))
+            and (price is None or abs((row["sess_last_price"] or 0) - price) < 1e-3))
+
+
+def freshness_breakdown(seen: dict, last_event_time: datetime, kafka_ack_ms: float) -> dict:
+    """Per-stage and per-feature freshness once every table has landed. `seen[table]` holds its rows and when the
+    app first read them complete. Replayed events keep their simulated event_time but are all produced at Play, so
+    every offset is from the last event, the only one whose event_time is the real produce time."""
+    def since(t):
+        return round((t - last_event_time).total_seconds() * 1000, 1)
+
+    def newest(rows, col):
+        return max(r[col] for r in rows)
+
+    # The breakdown follows the click count's table; each stage ends at a timestamp, the last when the app had read
+    # every table, so the stages add up to the total. App and pipeline clocks differ by a few ms, and the app's ack
+    # can return after the pipeline already read the event, so a stage is clamped at 0 rather than going negative.
+    w = seen["window"]["rows"]
+    total = max(since(v["detected_at"]) for v in seen.values())
+    points = [("Kafka write", "app", kafka_ack_ms),
+              ("Real-Time Mode read + computed", "pipeline · output_time", since(newest(w, "output_time"))),
+              ("Lakebase write", "pipeline · commit_time", since(newest(w, "commit_time"))),
+              ("App read every feature", "app · Lakebase", total)]
+    stages, prev = [], 0.0
+    for name, source, at in points:
+        stages.append({"name": name, "source": source, "ms": round(max(0.0, at - prev), 1)})
+        prev = max(prev, at)
+    features = []
+    for table, names in (("window", WINDOW_FEATURES), ("last", LAST_FEATURES)):
+        rows, at = seen[table]["rows"], seen[table]["detected_at"]
+        features += [{"feature": n, "table": table, "value": rows[0].get(n),
+                      "in_lakebase_ms": since(newest(rows, "commit_time")), "served_ms": since(at)} for n in names]
+    at = seen["category"]["detected_at"]
+    # A category the timed click didn't touch was committed with the untimed rest of the replay: no offset to show.
+    features += [{"feature": f"sess_cat_cnt_30m[{r['category']}]", "table": "category", "value": r["sess_cat_cnt_30m"],
+                  **({"in_lakebase_ms": since(r["commit_time"]), "served_ms": since(at)}
+                     if r["commit_time"] >= last_event_time else {"in_lakebase_ms": None, "served_ms": None})}
+                 for r in sorted(seen["category"]["rows"], key=lambda r: -r["sess_cat_cnt_30m"])]
+    return {"total_ms": total, "stages": stages, "features": features}
+
+
+class RecentValues:
+    """Values by id that the UI reads after its request returned (full L2 call times, replayed sessions). Bounded:
+    the oldest are forgotten."""
+
+    def __init__(self, max_size: int = 1000):
+        self._values, self._max, self._lock = OrderedDict(), max_size, threading.Lock()
+
+    def record(self, key: str, value):
+        with self._lock:
+            self._values[key] = value
+            while len(self._values) > self._max:
+                self._values.popitem(last=False)
+
+    def get(self, key: str):
+        with self._lock:
+            return self._values.get(key)
