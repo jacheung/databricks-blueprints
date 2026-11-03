@@ -1,6 +1,6 @@
-# The app reads Lakebase (QAC prefixes, demo scenarios) and produces scenario events to Kafka, as its service
-# principal. After the first deploy, grant that principal SELECT on the synced tables and ACCESS on the Kafka
-# service credential (README, "Run the app").
+# The app reads Lakebase (QAC prefixes, demo scenarios), embeds queries and searches the SERP index, and produces
+# scenario events to Kafka, as its service principal. After the first deploy, grant that principal SELECT on the
+# synced tables and ACCESS on the Kafka service credential (README, "Run the app").
 resources:
   apps:
     rts_app:
@@ -21,3 +21,14 @@ resources:
             branch: projects/rts-online-store/branches/production
             database: projects/rts-online-store/branches/production/databases/databricks-postgres
             permission: CAN_CONNECT_AND_CREATE
+        - name: query-embedding
+          description: SERP query vectors (T4, route-optimized; the SP's OAuth token reaches its data plane)
+          serving_endpoint:
+            name: rts-query-embedding
+            permission: CAN_QUERY
+        - name: serp-index
+          description: SERP L1 hybrid index over products
+          uc_securable:
+            securable_full_name: main.jon_cheung.products_hybrid_idx
+            securable_type: TABLE
+            permission: SELECT

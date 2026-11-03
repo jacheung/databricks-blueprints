@@ -6,7 +6,7 @@ Update this file, plus this track's one status line in the top-level file, at th
 
 ## Status
 **Status as of 2026-11-03:** services resumed and checked (`check_query_embedding.py` OK, `rts-qac-l2` READY,
-`rts-vs-endpoint` ONLINE). `/api/search` is written and tested locally (below); not deployed yet.
+`rts-vs-endpoint` ONLINE). `/api/search` deployed and verified as the app SP (below).
 
 ## Next
 **Next (after resuming): app wiring.**
@@ -42,8 +42,14 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
     200 = 111 dog-food ANN hits + 89 USB keyword hits). ANN rejects both ("Only one of Field 'query_text' or Field
     'query_vector'"). Not proven: that the index skips the pay-per-token call when given a vector (check
     `system.serving.endpoint_usage` if it matters)
-- [ ] `/api/search` deployed: `rts-query-embedding` app resource (`CAN_QUERY`), SP `SELECT` on `products_hybrid_idx`;
-  UI results column
+- [x] `/api/search` deployed (2026-11-03): app resources `rts-query-embedding` (`CAN_QUERY`) and a `uc_securable`
+  `TABLE` / `SELECT` on `products_hybrid_idx` (the index's kind is `TABLE_ONLINE_VECTOR_INDEX_REPLICA`; the SP gets a
+  direct SELECT, no grants job needed). Verified as the SP from the browser: HYBRID and ANN both `embedding: custom`,
+  200 hits. Single requests, indicative: ANN embed 79 / search 213 ms; HYBRID first request after restart embed 467
+  (cold connection) / search 267 ms. Notebook-path search was p50 586 ms, so the app path looks far faster; step 7 confirms
+- [ ] UI search results column
+- [ ] Warm the embedding client at startup (first request paid ~400 ms of connection setup)
+- [ ] `l2.items` duplicates `l1` (200 products, ~2x payload): return status only while L2 isn't deployed
 
 ### Step 5: QAC L2 in the app (model and endpoint: [ml/PLAN.md](../ml/PLAN.md))
 - [ ] App: `/api/qac` calls L2 with the timeout and falls back to L1; serving-endpoint app resource; endpoint-scoped
