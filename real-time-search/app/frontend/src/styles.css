@@ -55,6 +55,13 @@ button.link { padding: 0; border: 0; background: none; color: var(--lava-700); f
 .dropdown li { cursor: pointer; }
 .dropdown li:hover { background-color: var(--oat-medium); }
 .dropdown li.active { box-shadow: inset 0 0 0 2px var(--lava-600); opacity: 1; }
+/* QAC rows read as queries: one line, a search glyph, the typed prefix plain and the rest bold, category on the right */
+.dropdown ol { list-style: none; padding-left: 0; margin-top: 0.3rem; }
+.dropdown li { display: flex; align-items: baseline; gap: 0.5rem; margin: 0.1rem 0 0.1rem -0.35rem; padding: 0.3rem 0.35rem; }
+.dropdown .glyph { color: var(--navy-300); font-size: 0.95rem; }
+.dropdown .completion { flex: 1; min-width: 0; font-weight: 400; }
+.dropdown .completion strong { font-weight: 650; }
+.dropdown .cat { font-size: 0.7rem; color: var(--gray-text); white-space: nowrap; }
 .note { color: var(--yellow-800); }
 ol { padding-left: 1.4rem; margin: 0.5rem 0 0; }
 li { margin: 0.35rem 0; }
@@ -131,6 +138,44 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
 /* SERP results under the search box (the QAC dropdown floats over them) */
 .serp { margin-top: 1.25rem; transition: opacity 120ms; }
 .serp.stale { opacity: 0.55; }
-.serp .columns { margin-top: 0.5rem; }
-.serp-timings { font-size: 0.82rem; color: var(--gray-text); margin: 1rem 0 0; font-variant-numeric: tabular-nums; }
+/* SERP: one product grid with an L1 / L1 + L2 toggle */
+.serp-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.3rem; }
+.serp-head h2 { font-size: 1.2rem; }
+.toggle { display: inline-flex; border: 1px solid var(--gray-lines); border-radius: 6px; overflow: hidden; }
+.toggle button { color: var(--navy-800); background: var(--white); border-radius: 0; font-weight: 500; padding: 0.35rem 0.8rem; }
+.toggle button + button { border-left: 1px solid var(--gray-lines); }
+.toggle button:hover:not(:disabled) { background: var(--oat-medium); }
+.toggle button[aria-pressed="true"] { color: var(--white); background: var(--navy-800); }
+.toggle button:disabled { color: var(--navy-300); background: var(--white); cursor: not-allowed; }
+.serp .summary { font-weight: 600; color: var(--navy-800); }
+.grid { list-style: none; padding: 0; margin: 0.8rem 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.8rem; }
+@media (max-width: 720px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tile { position: relative; display: flex; flex-direction: column; gap: 0.2rem; margin: 0; padding: 0.6rem;
+  background: var(--white); border: 1px solid var(--gray-lines); border-radius: 8px; }
+.tile.change-same { opacity: 1; }
+.tile.change-up { border-color: var(--blue-600); }
+.tile.change-new { border-color: var(--green-600); }
+.thumb { display: grid; place-items: center; aspect-ratio: 1; border-radius: 6px; margin-bottom: 0.3rem;
+  font-size: 2rem; font-weight: 700; color: var(--white); }
+.thumb.navy { background: var(--navy-600); }
+.thumb.blue { background: var(--blue-600); }
+.thumb.green { background: var(--green-700); }
+.thumb.lava { background: var(--lava-700); }
+.thumb.yellow { background: var(--yellow-800); }
+.thumb.maroon { background: var(--maroon-600); }
+.badge.rank { position: absolute; top: 0.9rem; right: 0.9rem; margin: 0; }
+.ttitle { font-size: 0.85rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.brand { font-size: 0.75rem; color: var(--gray-text); }
+.price { font-size: 1.1rem; font-weight: 700; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.chips .badge { margin-left: 0; }
+.serp-timings { font-size: 0.78rem; color: var(--gray-text); margin: 1rem 0 0; font-variant-numeric: tabular-nums; }
 .seg.serp-embed, .key.serp-embed { background: var(--blue-600); }
+.pager { display: flex; align-items: center; gap: 0.3rem; margin-top: 1rem; }
+.pager button { min-width: 2rem; padding: 0.3rem 0.5rem; color: var(--navy-800); background: var(--white);
+  border: 1px solid var(--gray-lines); font-weight: 500; }
+.pager button:hover:not(:disabled) { background: var(--oat-medium); }
+.pager button[aria-current="page"] { color: var(--white); background: var(--navy-800); border-color: var(--navy-800); }
+.pager button:disabled { color: var(--navy-300); background: var(--white); }
+.pager .more { padding: 0 0.3rem; color: var(--gray-text); }
+.pager-note { margin-left: 0.6rem; font-size: 0.75rem; color: var(--gray-text); }

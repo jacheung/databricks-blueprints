@@ -48,7 +48,7 @@ SERP_L2_TIMEOUT_S = APP["timeouts_ms"]["serp_l2"] / 1000
 L2_POOL = ThreadPoolExecutor(max_workers=8)  # timed-out calls finish here without holding the request
 SCHEMA = CFG["unity_catalog"]["schema"]
 QAC_N = 10
-SERP_N = 10
+SERP_N = 40  # 4 UI pages of 10; L2 reranks every L1 hit either way, so paging needs no extra call
 L2_INPUTS = l2_inputs(CFG)
 w = WorkspaceClient()
 
