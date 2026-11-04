@@ -5,16 +5,15 @@ A box is ticked only when its check has passed on Databricks (`e2-demo-fe`, `mai
 Update this file, plus this track's one status line in the top-level file, at the end of every step.
 
 ## Status
-**Status as of 2026-11-03 (evening):** QAC L1 + L2 demo deployed with the "Under the hood" panel (clickstream →
-features and keystroke → completions), intent timeline, L2 rank badges and brand colors, all checked in the browser by
-the user. Replayed events reach all 3 session tables (pipeline on). Not yet shown: that the session-aware column
-actually changes vs L1. Session pipeline **running** (the user keeps it up for now).
+**Status as of 2026-11-03 (late evening):** QAC L1 + L2 demo deployed with the "Under the hood" panel (clickstream →
+features and keystroke → completions), intent timeline, L2 rank badges, brand colors and the L2 inputs bar, all
+checked in the browser by the user. The user sees L2 move rows vs L1 after Play (rank badges, NEW). The per-feature
+table below the columns is gone (the inputs bar replaces it). Session pipeline **running**; it was stopped at 22:40
+UTC, which made every Play time out with "landed: none" until it was restarted (23:04) and caught up (~4 min).
 
 ## Next
-1. While the pipeline is up: does the session-aware column change vs L1 after Play (do the intent tags rise)? Plus
-   `/api/bench/qac_l2` with a live session (does a hit lookup cost more than a miss?).
-2. If L2 barely moves: the `sess_last_event_type` skew (cross-track ask) and the deferred session brand count are the
-   first suspects; that's data/ml work.
+1. While the pipeline is up: `/api/bench/qac_l2` with a live session (does a hit lookup cost more than a miss?).
+2. User history (open item below): score a logged-in scenario's next query with and without `user_id`.
 3. UI search results column (`/api/search`, HYBRID default).
 4. Step 7: per-stage p50/p95 at typing pace (not only back-to-back) and the L2 fallback rate; HYBRID vs ANN.
 
@@ -23,6 +22,8 @@ actually changes vs L1. Session pipeline **running** (the user keeps it up for n
   of their intent sessions, but scenarios aren't picked so user history matters, and nothing isolates its effect
   (logged-in lift +0.068 vs guest +0.045 MRR is confounded). Check first: score a logged-in scenario's next query
   with and without `user_id`; show user features only if the ranking changes.
+- `sess_last_event_type` skew (cross-track ask, data/ml): online it is always the last click or cart, though the spec
+  defines it over all events, so training may have seen `search` values serving never does.
 - Check the app's Lakebase SELECT survives a snapshot re-sync (synced tables may be recreated; default privileges are set).
 - Pay-per-token fallback in `/api/search` (when `rts-query-embedding` fails): kept for now, visible as
   `embedding: fallback_managed`. The user's call whether to fail instead.
@@ -86,7 +87,8 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
 - [x] Streaming pipeline running during Play, so replayed events reach session features (2026-11-03: all 3 tables land,
   timed in the panel)
 - [ ] Re-run `/api/bench/qac_l2` with a live session (hit vs miss lookup cost)
-- [ ] Demo: replayed scenarios flip the right column vs L1
+- [ ] Demo: replayed scenarios flip the right column vs L1 (2026-11-03: the user sees rank badges and NEW rows after
+  Play; not yet checked across scenarios)
 - [x] Latency and freshness bars (2026-11-03; freshness checked in the browser by the user with the pipeline on). QAC: a
   stacked L1 + L2 bar, dashed marker at `budgets_ms.qac_total_p95` (40 ms), fixed 1.5x scale; server-side times only.
   On a timeout the UI fetches the call's full time (`/api/qac/{request_id}/l2_time`, `RecentTimes`, 1 test) and draws
@@ -103,8 +105,8 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   read) and "Keystroke → completions" (L1, L2, overrun), each a bar with one row per segment on one ms scale (the
   40 ms budget line on the keystroke bar only), then planted intent and clickstream history. Keystroke axis fixed at
   60 ms (the user: covers p99 end to end; slower ones clip with ▸); the clickstream bar fits its own total. Both bars and all their
-  rows render from page load with "–" and fill in on Play / the first keystroke, so the layout never shifts. Below the columns, a collapsed per-feature table: value,
-  in-Lakebase and read-by-app offsets. `/api/sessions/{id}/freshness` waits server-side, reading the 3 session tables every 10 ms until
+  rows render from page load with "–" and fill in on Play / the first keystroke, so the layout never shifts. (A collapsed
+  per-feature table below the columns was removed 2026-11-03; the L2 inputs bar replaces it.) `/api/sessions/{id}/freshness` waits server-side, reading the 3 session tables every 10 ms until
   each matches what Play sent (`expected_session_features`, `landed`, `freshness_breakdown`). Timing one event, like
   the NBO app: the replay ends on its last click or cart (the only event that moves all 3 tables); Play sends the rest
   untimed, then stamps and sends that click alone, so "Kafka write" is one event's ack. Before, it was the whole
@@ -127,6 +129,17 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   in L1 after filtering, not the table `rank`; 2 tests, 117 pass). The Session-aware column shows `▲n` / `▼n` /
   `NEW` (from below L1's shown top 10) per row, tints rows moved up or new, dims unchanged rows, and a summary
   line ("L2 moved 4 of 10, brought in 2 from below L1's top 10"). Only when `l2.status` is `ok`
+- [x] L2 inputs bar (2026-11-03, deployed; checked in the browser by the user): the Session-aware subtitle reads "L1 + L2:
+  with features from" plus a bar of what the QAC L2 endpoint receives, widths by count: 12 streaming (session,
+  Kafka → Real-Time Mode), 4 batch (user, hourly Delta), 13 request (the L1 row + `is_guest`). Groups come from
+  `rts_shared` (`l2_inputs`, 1 test), so they follow the endpoint; item features aren't QAC L2 inputs. Hover or focus a
+  segment: its first 3 features with value and when the app read them, then "… N more". Streaming values and `+N ms`
+  come from the freshness check; batch from `/api/users/{user_id}/features` (the 4 `rts_user_online_*` tables, found
+  by column like the session ones; `user_feature_values`, 1 test; read once per Play), shown as "hourly batch" since
+  those tables carry no timestamp; request values are exactly what was sent for the top completion. Guests get a
+  hatched batch segment. These are the app's own reads: the endpoint returns only scores
+- [x] Column headers aligned (2026-11-03, deployed; not yet checked in the browser): both columns share one header row
+  (CSS subgrid; note and diff summary moved into `<header>`), so the lists start level whatever Session-aware shows
 
 ### Step 7: Benchmark
 - [ ] `07_latency_bench`: per-stage p50/p95, L1-only vs L1+L2. Started: `/api/bench/qac_l1` and `/api/bench/qac_l2`
