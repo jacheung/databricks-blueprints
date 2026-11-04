@@ -10,9 +10,13 @@ completions, keystroke → on screen), intent timeline, L2 rank badges and the L
 the user. L2 moves rows vs L1 after Play. Debounce 20 ms; `rts-qac-l2` on CPU Medium: warm, 6% of L2 calls miss the
 36 ms timeout (by ≤ 4 ms), but the first seconds after ~3–4 min idle run 70–170 ms, so warm it with a few queries
 before presenting. Session pipeline **running** (a stopped one makes Play time out with "landed: none").
+QAC moved into a dropdown under the search box (2026-11-04, checked in the browser by the user), freeing the area
+below for SERP.
 
 ## Next
-1. UI search results column (`/api/search`, HYBRID default).
+1. SERP results below the search box (`/api/search`, HYBRID default): Hybrid L1 | L1 + L2 columns ("not deployed"
+   until SERP L2 is wired), embed/search timings in the header. With it, Enter or a picked completion searches, and
+   "Try …" fills the box, opens the dropdown, then Enter searches. SERP metrics in the Under-the-hood panel later.
 2. Step 7: per-stage p50/p95 at typing pace and the L2 fallback rate; HYBRID vs ANN.
 Deferred (the user, 2026-11-04): the user-history check (open item below).
 
@@ -63,7 +67,11 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   direct SELECT, no grants job needed). Verified as the SP from the browser: HYBRID and ANN both `embedding: custom`,
   200 hits. Single requests, indicative: ANN embed 79 / search 213 ms; HYBRID first request after restart embed 467
   (cold connection) / search 267 ms. Notebook-path search was p50 586 ms, so the app path looks far faster; step 7 confirms
-- [ ] UI search results column
+- [x] QAC dropdown (2026-11-04, checked in the browser by the user): the Static and Session-aware columns float under
+  the search box (same shared header, badges, inputs bar and L2 status). Opens on focus or typing; closes on Esc or
+  when focus leaves the box. ↑/↓ + Enter move through Session-aware; a click picks from either column. A pick only
+  fills the box for now (not timed as a keystroke); "Try …" focuses the box so the dropdown opens
+- [ ] UI search results column (below the search box, freed by the dropdown)
 - [x] Warm the embedding and QAC L2 clients at startup, in the background: the first search embedded in 78 ms
   (was 467 ms)
 - [x] `l2` carries only its status unless reranked (was a duplicate of `l1`: 200 products, ~2x payload)

@@ -382,7 +382,8 @@ function useUserFeatures(userId) {
   return features;
 }
 
-function Column({ title, subtitle, items, note, shown, intent }) {
+// `listId` marks the column ↑/↓ moves through (`active` is its highlighted row); a click on any row picks it.
+function Column({ title, subtitle, items, note, shown, intent, onPick, listId, active }) {
   const changes = items.map((c, i) => (shown === undefined ? null : rankChange(c, i + 1, shown)));
   const diffed = changes.some((ch) => ch);
   return (
@@ -394,9 +395,12 @@ function Column({ title, subtitle, items, note, shown, intent }) {
         {note && <p className="note">{note}</p>}
         {diffed && <p className="summary">{diffSummary(changes)}</p>}
       </header>
-      <ol>
+      <ol id={listId} role={listId && "listbox"}>
         {items.map((c, i) => (
-          <li key={c.completion} className={changes[i] ? `change-${changes[i].kind}` : undefined}>
+          <li key={c.completion} id={listId && `${listId}-${i}`} role={listId && "option"}
+            aria-selected={listId ? i === active : undefined} onClick={() => onPick(c.completion)}
+            className={[changes[i] && `change-${changes[i].kind}`, listId && i === active && "active"]
+              .filter(Boolean).join(" ") || undefined}>
             <span className="completion">
               {c.completion}
               {changes[i]?.label && <span className={`badge ${changes[i].kind}`}>{changes[i].label}</span>}
@@ -424,6 +428,9 @@ export default function App() {
   const [q, setQ] = useState("");
   const [result, setResult] = useState(null);
   const [e2e, setE2e] = useState(null);
+  const [open, setOpen] = useState(false); // the QAC dropdown
+  const [active, setActive] = useState(-1); // its ↑/↓ row in Session-aware, -1 for none
+  const input = useRef(null);
   const latest = useRef(0);
   const keyAt = useRef(null); // event timestamp of the last keystroke (or "Try" click), on performance.now()'s clock
 
@@ -492,6 +499,26 @@ export default function App() {
   const l1 = result?.l1 ?? [];
   const l2 = result?.l2 ?? { status: "not_deployed" };
   const l2Items = l2.items ?? l1;
+  const listed = open && l2Items.length > 0;
+
+  // Picking a completion fills the box and closes the dropdown (it isn't a keystroke, so it isn't timed).
+  function pick(completion) {
+    setQ(completion);
+    setActive(-1);
+    setOpen(false);
+  }
+
+  function onKeyDown(e) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault(); // keep the caret where it is
+      setOpen(true);
+      setActive((a) => Math.max(-1, Math.min(l2Items.length - 1, a + (e.key === "ArrowDown" ? 1 : -1))));
+    } else if (e.key === "Enter" && listed && l2Items[active]) {
+      pick(l2Items[active].completion);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  }
 
   return (
     <div className="page">
@@ -521,7 +548,12 @@ export default function App() {
             <p className="session">
               Replayed {session.events} events to Kafka as <code>{session.session_id}</code>
               {session.user_id ? ` (user ${session.user_id})` : " (guest)"}. Try{" "}
-              <button className="link" onClick={(e) => { keyAt.current = e.timeStamp; setQ(session.next_query); }}>
+              <button className="link" onClick={(e) => {
+                keyAt.current = e.timeStamp;
+                setQ(session.next_query);
+                setActive(-1);
+                input.current.focus(); // opens the dropdown
+              }}>
                 “{session.next_query}”
               </button>
             </p>
@@ -529,30 +561,48 @@ export default function App() {
           {error && <p className="error">{error}</p>}
         </section>
 
-        <input
-          className="search"
-          autoFocus
-          placeholder="Start typing…"
-          value={q}
-          onChange={(e) => { keyAt.current = e.timeStamp; setQ(e.target.value); }}
-        />
-
-        <div className="columns">
-          <Column title="Static" subtitle="L1: popularity from the prefix table" items={l1} intent={session?.intent} />
-          <Column
-            title="Session-aware"
-            subtitle={
-              <>
-                L1 + L2: with features from{" "}
-                <FeatureBar inputs={cfg.l2_inputs} freshness={freshness} userFeatures={userFeatures}
-                  top={l2Items[0]} session={session} />
-              </>
-            }
-            items={l2Items}
-            note={L2_STATUS[l2.status] ?? l2.status}
-            shown={l2.items ? l1.length : undefined}
-            intent={session?.intent}
+        {/* Focus leaving the box and its dropdown closes it; mousedown inside the dropdown keeps focus in the box */}
+        <div className="searchbox" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
+          <input
+            ref={input}
+            className="search"
+            autoFocus
+            placeholder="Start typing…"
+            value={q}
+            role="combobox"
+            aria-expanded={listed}
+            aria-controls="qac-l2"
+            aria-activedescendant={listed && active >= 0 ? `qac-l2-${active}` : undefined}
+            onFocus={() => setOpen(true)}
+            onChange={(e) => { keyAt.current = e.timeStamp; setQ(e.target.value); setActive(-1); setOpen(true); }}
+            onKeyDown={onKeyDown}
           />
+
+          {listed && (
+            <div className="dropdown" onMouseDown={(e) => e.preventDefault()}>
+              <div className="columns">
+                <Column title="Static" subtitle="L1: popularity from the prefix table" items={l1} intent={session?.intent}
+                  onPick={pick} />
+                <Column
+                  title="Session-aware"
+                  subtitle={
+                    <>
+                      L1 + L2: with features from{" "}
+                      <FeatureBar inputs={cfg.l2_inputs} freshness={freshness} userFeatures={userFeatures}
+                        top={l2Items[0]} session={session} />
+                    </>
+                  }
+                  items={l2Items}
+                  note={L2_STATUS[l2.status] ?? l2.status}
+                  shown={l2.items ? l1.length : undefined}
+                  intent={session?.intent}
+                  onPick={pick}
+                  listId="qac-l2"
+                  active={active}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </main>
       <div />
