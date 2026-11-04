@@ -179,6 +179,11 @@ models:
     workload_type: GPU_SMALL         # T4; the CPU variant is benchmarked on a temporary endpoint
     workload_size: Small
     scale_to_zero_enabled: false
+    lgbm:                            # comparator: LightGBM on the same matrix, served on CPU to compare end-to-end latency
+      registered_name: serp_ranker_lgbm
+      endpoint: rts-serp-l2-lgbm     # temporary: delete after the latency comparison
+      workload_type: CPU
+      workload_size: Small
 
 app:
   name: real-time-search

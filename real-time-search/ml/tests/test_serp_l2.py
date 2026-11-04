@@ -86,3 +86,17 @@ def test_slice_report_takes_ndcg():
     report = slice_report(df, ["is_guest"], per_group=ndcg_per_group, metrics=("ndcg",), seed=0)
     overall = next(r for r in report if r["slice"] == "all")
     assert overall["metric"] == "ndcg" and overall["l2"] == 1.0 and overall["lift"] > 0
+
+
+def test_saved_lightgbm_model_scores_raw_rows_like_training(tmp_path):
+    import mlflow
+
+    from rts_ml.serp_l2_model import SerpLgbmRanker
+
+    ranker = fit_ranker(searches(100, seed=0), searches(30, seed=1), matrix=model_matrix, eval_at=10)
+    # The endpoint strips the lookup keys before calling the model: it gets features and request fields only.
+    test = searches(5, seed=2).drop(columns=["session_id", "user_id", "product_id"])
+    mlflow.pyfunc.save_model(tmp_path / "model", python_model=SerpLgbmRanker(ranker),
+                             code_paths=["ml/src/rts_ml", "shared/src/rts_shared"])
+    loaded = mlflow.pyfunc.load_model(str(tmp_path / "model"))
+    assert np.allclose(np.asarray(loaded.predict(test)), ranker.predict(model_matrix(test)))

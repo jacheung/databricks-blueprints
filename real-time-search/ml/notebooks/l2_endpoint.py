@@ -1,12 +1,13 @@
 # Databricks notebook source
-# DBTITLE 1,QAC L2: serving endpoint
+# DBTITLE 1,L2: serving endpoint (QAC or SERP)
 # MAGIC %md
-# MAGIC # QAC L2: serving endpoint
+# MAGIC # L2: serving endpoint (QAC or SERP)
 # MAGIC
-# MAGIC Serves the latest version of `models.qac_l2.registered_name` on `models.qac_l2.endpoint` (CPU, route-optimized,
-# MAGIC sized from config). The model was logged with `fe.log_model`, so the endpoint looks up the session (Kafka stream)
-# MAGIC and user (Delta) features in the online store itself; callers send only keys and the request fields
-# MAGIC (`rts_shared.retrieval.qac_l2_records`).
+# MAGIC Serves the latest version of `models.<model_key>.registered_name` on `models.<model_key>.endpoint`
+# MAGIC (route-optimized, workload type and size from config). `variant=lgbm` serves the SERP LightGBM comparator from
+# MAGIC `models.serp_l2.lgbm` instead (CPU, for the latency comparison). The models were logged with `fe.log_model`, so
+# MAGIC the endpoint looks up the session (Kafka stream), user and item (Delta) features in the online store itself;
+# MAGIC callers send only keys and the request fields (`rts_shared.retrieval.qac_l2_records` / `serp_l2_records`).
 # MAGIC
 # MAGIC Check: the endpoint is ready and serving that version. Queries are checked elsewhere: route-optimized endpoints
 # MAGIC accept only OAuth tokens, which notebook credentials can't provide. The app (its service principal uses OAuth)
@@ -36,15 +37,23 @@ _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().not
 ROOT = "/Workspace" + "/".join(_nb_path.split("/")[:-3])  # this notebook is <ROOT>/ml/notebooks/<name>
 sys.path[:0] = [f"{ROOT}/shared/src", f"{ROOT}/ml/src"]
 from rts_ml.serving import ensure_endpoint, wait_ready
-from rts_shared.config import load_config, model_name
+from rts_shared.config import full_name, load_config, model_name
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.serving import ServedEntityInput, ServingModelWorkloadType
 
 dbutils.widgets.text("config_path", f"{ROOT}/shared/configs/dev.yml")  # jobs pass configs/<bundle target>.yml
+dbutils.widgets.dropdown("model_key", "qac_l2", ["qac_l2", "serp_l2"])
+dbutils.widgets.dropdown("variant", "", ["", "lgbm"])  # lgbm: the SERP LightGBM comparator
 CFG = load_config(dbutils.widgets.get("config_path"))
-L2 = CFG["models"]["qac_l2"]
-MODEL_NAME, ENDPOINT = model_name(CFG, "qac_l2"), L2["endpoint"]
+KEY, VARIANT = dbutils.widgets.get("model_key"), dbutils.widgets.get("variant")
+L2 = CFG["models"][KEY]
+MODEL_NAME = model_name(CFG, KEY)
+if VARIANT:
+    assert KEY == "serp_l2", f"variant {VARIANT!r} exists only for serp_l2"
+    L2 = {**L2, **L2[VARIANT]}  # its own name, endpoint and workload; route optimization etc. from serp_l2
+    MODEL_NAME = full_name(CFG, L2["registered_name"])
+ENDPOINT = L2["endpoint"]
 w = WorkspaceClient()
 
 # COMMAND ----------

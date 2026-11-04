@@ -24,6 +24,31 @@ resources:
           environment_key: serverless
           notebook_task:
             notebook_path: ../notebooks/serp_l2_training_set.py
+        - task_key: serp_l2_dcnv2
+          depends_on:
+            - task_key: serp_l2_training_set
+          environment_key: gpu
+          compute:
+            hardware_accelerator: GPU_1xA10
+          notebook_task:
+            notebook_path: ../notebooks/serp_l2_dcnv2.py
+        - task_key: serp_l2_endpoint
+          depends_on:
+            - task_key: serp_l2_dcnv2
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/l2_endpoint.py
+            base_parameters:
+              model_key: serp_l2
+        - task_key: serp_l2_lgbm_endpoint   # temporary comparator: delete the endpoint after the latency run
+          depends_on:
+            - task_key: serp_l2_dcnv2
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/l2_endpoint.py
+            base_parameters:
+              model_key: serp_l2
+              variant: lgbm
         - task_key: serp_l2_gpu_check
           environment_key: gpu
           compute:

@@ -150,3 +150,9 @@ def test_kafka_topic_name_is_validated(tmp_path, cfg, topic):
     bad["kafka"]["topic"] = topic
     with pytest.raises(ValueError, match="kafka.topic"):
         load_config(write(tmp_path, bad))
+
+
+def test_serp_l2_lightgbm_comparator_serves_on_cpu(cfg):
+    lgbm = cfg["models"]["serp_l2"]["lgbm"]
+    assert lgbm["workload_type"] == "CPU" and lgbm["endpoint"] != cfg["models"]["serp_l2"]["endpoint"]
+    assert lgbm["registered_name"] != cfg["models"]["serp_l2"]["registered_name"]

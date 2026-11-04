@@ -162,6 +162,38 @@ Design agreed 2026-11-03 (plan: ~/.claude/plans/streamed-fluttering-turing.md):
     training but the previous event at serving, so SERP drops it; `has_session` = an earlier search, `has_item` =
     count > 0 (same input whether the online store returns 0 or null). QAC reads it too, but LightGBM never split on a
     constant, so its scores can't move. Asked data (top-level cross-track table)
-- [ ] DCNv2 + LightGBM comparator, `fe.log_model`; NDCG@10 lift over L1
-- [ ] Endpoint `rts-serp-l2` (GPU_SMALL, route-optimized) serves with online lookups
-- [ ] CPU vs GPU latency at 200/500 candidates
+- [x] `serp_l2_dcnv2` (Serverless GPU A10, AI env v6; run `655125908313421`, 8 min): DCNv2 trains in 12 s, best
+  epoch 2; LightGBM best iteration 7. Raw Feature View rows score like the packed matrix (max diff 1.9e-6), and both
+  registered models reload and score them the same. `serp_ranker_dcnv2` v2 + `serp_ranker_lgbm` v1 (comparator,
+  registered for the latency comparison; the user, 2026-11-04). Test split, NDCG@10, 4,397 searches with an engaged
+  candidate (of 5,000), paired bootstrap 95% CI:
+
+  | Slice | n | L1 | LightGBM (lift) | DCNv2 (lift, CI) | DCNv2 − LightGBM (CI) |
+  |---|---|---|---|---|---|
+  | all | 4,397 | 0.224 | 0.287 (+0.063) | 0.289 (+0.065, 0.058–0.073) | +0.002 (−0.004 to +0.009) |
+  | first / 2nd+ search | 2,331 / 2,066 | 0.226 / 0.221 | +0.058 / +0.069 | +0.058 / +0.074 | 0.000 / +0.005 |
+  | guest / logged-in | 1,727 / 2,670 | 0.220 / 0.226 | +0.067 / +0.060 | +0.060 / +0.069 | −0.007 / +0.009 (0.001–0.016) |
+  | intent none | 1,375 | 0.235 | +0.070 | +0.059 | −0.011 (−0.022 to 0.000) |
+  | intent category | 991 | 0.237 | +0.072 | +0.076 | +0.004 |
+  | intent category+brand | 2,031 | 0.209 | +0.054 | +0.064 | +0.011 (0.002–0.019) |
+
+  Reading: DCNv2 ≈ LightGBM overall. Most of the lift isn't personalization (no-intent and first searches gain
+  about as much); likely item popularity, which the sim inflates (only judged products are ever clicked: exposure
+  bias). Brand signal is weak (category+brand has the smallest LightGBM lift). **The user, 2026-11-04: the lift over
+  L1 (comparable to QAC's) is enough; no more features or data.** Brand counts and a popularity ablation are parked
+  - First run (`456803163723234`) registered v1, then hung 5.5 h before a model-only latency cell (cause unknown; the
+    reload cell's artifact-download widget is the suspect). Cancelled; the timing moved to the endpoints
+- [x] Endpoints with online lookups (`l2_endpoint.py`, was `qac_l2_endpoint.py`: widgets `model_key`, `variant`):
+  `rts-serp-l2` (T4, DCNv2 v2) ~35+ min to READY, `rts-serp-l2-lgbm` (CPU Small, LightGBM v1) faster. Both return a
+  score per candidate, and guest vs logged-in scores differ (user lookups work). **Deleted after the benchmark**
+- [x] End-to-end latency, `ml/scripts/bench_serp_l2.py` from a laptop (WAN round trip included, same for both;
+  100 calls after 5 warm-up, one logged-in test search's real candidates via `serp_l2_records`), 2026-11-04:
+
+  | Endpoint | 200 candidates p50 / p95 (ms) | 500 candidates p50 / p95 (ms) |
+  |---|---|---|
+  | LightGBM, CPU Small | 92.5 / 107.9 | 102.8 / 137.6 |
+  | DCNv2, T4 | 100.8 / 117.9 | 115.8 / 145.3 |
+
+  The GPU buys nothing at this size: the model is tiny, and serving time is dominated by the request path, the
+  online lookups (200 item keys) and the pandas crosses, not the matmuls. CPU LightGBM is ~8 ms faster at the same
+  NDCG. Both fit the 200 ms `serp_l2` timeout; app-side numbers are step 7

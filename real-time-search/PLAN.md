@@ -16,7 +16,7 @@ Read this file, then the plan for your track only.
 | Track | Worktree and branch | Status |
 |---|---|---|
 | app | this checkout, branch `real-time-search` (also the integration branch) | QAC L1 + L2 demo with the Under-the-hood panel and the L2 inputs bar; L2 moves rows vs L1 (seen by the user); next: live-session L2 bench, user-history check, then the SERP column |
-| ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 (step 6): L1 candidates + training set built; DCNv2 training next |
+| ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 done: DCNv2 v2 +0.065 NDCG@10 (≈ LightGBM); e2e CPU LightGBM 92 ms vs T4 DCNv2 101 ms p50 at 200; endpoints deleted |
 | data | no session; work from this checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
 
 **Rules for running tracks in parallel**
@@ -40,6 +40,8 @@ Read this file, then the plan for your track only.
 | Hourly user/item batch materializations (Feature Store-managed jobs, ~7 min/run, ~6 tables) | data | Unpaused; pausing them not yet checked |
 | Lakebase `rts-online-store` (online store, QAC prefixes, demo scenarios) | data | Running (min 4 / max 8 CU, no auto-suspend: bills 24/7) |
 | App `rts-search` (MEDIUM compute; shared with a colleague, CAN_USE) | app | Running (QAC L1 + L2, `/api/search`) |
+| `rts-serp-l2` (T4, route-optimized; DCNv2) | ml | Deleted 2026-11-04 after the benchmark; recreate with `bundle run serp_l2_job --only serp_l2_endpoint` |
+| `rts-serp-l2-lgbm` (CPU, route-optimized; LightGBM comparator) | ml | Deleted 2026-11-04 after the benchmark |
 
 - **Stop billable resources when not testing (the user's rule).** Serving endpoints can't be stopped, only deleted
   (Express GPU rebuild ~5 min): `rts-qac-l2` (CPU) and `rts-query-embedding` (T4); `rts-vs-endpoint` bills hourly too.
@@ -98,9 +100,8 @@ Checked by tests, not by sessions agreeing. Change one only under rule 1.
 | Ask | From | To | State |
 |---|---|---|---|
 | Online table names for the session features (session panel) | app | data | done by the app: found in Postgres database `main` (named after the catalog) via `pg_catalog` |
-| Possible train/serve skew: online `sess_last_event_type` is the last click/cart (2026-11-03: sc1 ends `back`, sc5 `search`, both online `click`), but `feature_specs` defines it over all events. Check what training saw | app | data, ml | open |
+| Possible train/serve skew: online `sess_last_event_type` is the last click/cart (2026-11-03: sc1 ends `back`, sc5 `search`, both online `click`), but `feature_specs` defines it over all events. Check what training saw | app | data, ml | ml answered 2026-11-04: training always saw `search` (offline `ColumnSelection` includes the event at the label time; window counts exclude it), so the skew is real. SERP L2 drops the feature; QAC can't be affected (constant in training, LightGBM never split on it). Open for data: intended semantics |
 | `rts-qac-l2` session lookups checked from the app via scenario Play | ml | app | open |
-| `sess_last_event_type` (`ColumnSelection`) includes the event at the label time; window counts exclude it. Intended? SERP L2 drops it; QAC can't be affected (constant in training) | ml | data | open |
 
 ## Where things are
 - Local code: this folder. Bundles deploy to `/Workspace/Users/jon.cheung@databricks.com/real-time-search/<bundle>/files/`
