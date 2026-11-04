@@ -33,14 +33,14 @@ Read this file, then the plan for your track only.
 | Resource | Owner | State |
 |---|---|---|
 | `rts-vs-endpoint` + `products_hybrid_idx` (Standard; bills hourly) | ml | ONLINE (kept overnight: the workspace is at its 500-endpoint quota) |
-| `rts-query-embedding` (T4, route-optimized) | ml | READY since 2026-11-03 |
-| `rts-qac-l2` (CPU Medium, route-optimized, no scale-to-zero) | ml | READY since 2026-11-03; Small → Medium and scale-to-zero (found on) → off on 2026-11-04 for the 20 ms debounce |
-| Session pipeline `b2e71ddb-8541-4ffa-8c4e-82ecbeca22da` (continuous, Real-Time Mode → Lakebase session tables) | data | **Running since 2026-11-03** (app freshness-bar and Play check); stop right after |
-| Kafka ingestion pipeline `1fa949e7-2477-4306-9898-66f992328abf` (continuous, topic → `session_events_ingest`) | data | **Running since 2026-10-30**; only training/offline features need it, not the app |
+| `rts-query-embedding` (T4, route-optimized) | ml | READY since 2026-11-04 (recreated, scale-to-zero off) |
+| `rts-qac-l2` (CPU Medium, route-optimized, no scale-to-zero) | ml | READY since 2026-11-04 (recreated on CPU Medium, scale-to-zero off) |
+| Session pipeline `b2e71ddb-8541-4ffa-8c4e-82ecbeca22da` (continuous, Real-Time Mode → Lakebase session tables) | data | **Running since 2026-11-04** (app); stop at end of day |
+| Kafka ingestion pipeline `1fa949e7-2477-4306-9898-66f992328abf` (continuous, topic → `session_events_ingest`) | data | Stopped 2026-11-04 (end of day); only training/offline features need it, not the app |
 | Hourly user/item batch materializations (Feature Store-managed jobs, ~7 min/run, ~6 tables) | data | Unpaused; pausing them not yet checked |
 | Lakebase `rts-online-store` (online store, QAC prefixes, demo scenarios) | data | Running (min 4 / max 8 CU, no auto-suspend: bills 24/7) |
 | App `rts-search` (MEDIUM compute; shared with a colleague, CAN_USE) | app | Running (QAC L1 + L2, `/api/search`) |
-| `rts-serp-l2` (T4, route-optimized; DCNv2) | ml | Deleted 2026-11-04 after the benchmark; recreate with `bundle run serp_l2_job --only serp_l2_endpoint` |
+| `rts-serp-l2` (T4, route-optimized; DCNv2) | ml | READY since 2026-11-04 for the app's SERP L2 wiring (Express T4: the job took ~7 min); recreate with `bundle run serp_l2_job --only serp_l2_endpoint` |
 | `rts-serp-l2-lgbm` (CPU, route-optimized; LightGBM comparator) | ml | Deleted 2026-11-04 after the benchmark |
 
 - **Stop billable resources when not testing (the user's rule).** Serving endpoints can't be stopped, only deleted
@@ -58,7 +58,7 @@ Read this file, then the plan for your track only.
 **Pause at end of day:**
 1. `databricks pipelines stop b2e71ddb-8541-4ffa-8c4e-82ecbeca22da -p e2-demo-fe` (session)
 2. `databricks pipelines stop 1fa949e7-2477-4306-9898-66f992328abf -p e2-demo-fe` (ingestion)
-3. `databricks serving-endpoints delete rts-query-embedding -p e2-demo-fe` and `... delete rts-qac-l2 -p e2-demo-fe`
+3. `databricks serving-endpoints delete rts-query-embedding -p e2-demo-fe`, `... delete rts-qac-l2 -p e2-demo-fe`, and `... delete rts-serp-l2 -p e2-demo-fe`
 4. `databricks apps stop rts-search -p e2-demo-fe` (this also cuts off anyone it's shared with)
 5. Update the state column above.
 
@@ -69,6 +69,7 @@ Read this file, then the plan for your track only.
        `qac_ranker_lgbm`; no retraining)
      - `databricks bundle run retrieval_job -t dev -p e2-demo-fe --only serp_query_embedding` (serves the latest
        `gte_large_en_v1_5_raw` on a T4, Express, ~5 min; no GPU logging needed)
+     - `databricks bundle run serp_l2_job -t dev -p e2-demo-fe --only serp_l2_endpoint` (DCNv2 on a T4, ~7 min)
    - `databricks apps start rts-search -p e2-demo-fe`
    - `databricks pipelines start-update b2e71ddb-8541-4ffa-8c4e-82ecbeca22da -p e2-demo-fe` (session; ~70 s to
      RUNNING, then ~3 min to catch up on the backlog before Play works)
@@ -77,6 +78,9 @@ Read this file, then the plan for your track only.
 2. Check from this folder: `uv run --no-project --with "databricks-sdk>=0.81" --with pyyaml python -I
    ml/scripts/check_query_embedding.py shared/configs/dev.yml` prints OK, and `databricks serving-endpoints get
    rts-qac-l2 -p e2-demo-fe` is READY. `rts-vs-endpoint` should be ONLINE.
+   Then `cd app && databricks bundle deploy -t dev -p e2-demo-fe`: deleting an endpoint drops its permissions, so the
+   app SP has no `CAN_QUERY` on the recreated ones until the app's resources are re-applied (2026-11-04: L2 and
+   custom embeddings would silently fall back).
 3. About 4 min after starting the session pipeline, play one throwaway scenario and check that the freshness panel
    fills in.
 
