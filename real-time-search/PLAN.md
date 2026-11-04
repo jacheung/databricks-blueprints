@@ -15,18 +15,23 @@ Read this file, then the plan for your track only.
 
 | Track | Worktree and branch | Status |
 |---|---|---|
-| app | this checkout, branch `real-time-search` (also the integration branch) | QAC L1 + L2 demo: Under-the-hood panel, L2 inputs bar, keystroke → on screen timing; 20 ms debounce, L2 on CPU Medium (warm: 6% miss the 36 ms timeout); QAC in a dropdown under the search box; next: SERP results below it, then SERP L2 |
+| app | worktree `~/GitHub/databricks-blueprints-rts-app`, branch `rts-app` | QAC L1 + L2 demo: Under-the-hood panel, L2 inputs bar, keystroke → on screen timing; 20 ms debounce, L2 on CPU Medium (warm: 6% miss the 36 ms timeout); QAC in a dropdown under the search box; next: SERP results below it, then SERP L2 |
 | ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 done: DCNv2 v2 +0.065 NDCG@10 (≈ LightGBM); e2e CPU LightGBM 92 ms vs T4 DCNv2 101 ms p50 at 200; app serves DCNv2: `rts-serp-l2` (T4) READY; whole SERP path from a laptop p50 444 / p95 502 ms (embed 122, L1 216, L2 102 p50) |
-| data | no session; work from this checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
+| data | no session; work from the main checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
 
 **Rules for running tracks in parallel**
-1. `shared/` changes land on `real-time-search` with their tests, one session at a time; other tracks rebase before
+The main checkout (`~/GitHub/databricks-blueprints`) stays on `main` and holds no track's work: each track commits on
+its own branch in its own worktree, then merges into `main` there (`git merge rts-app`, then push). New track:
+`git worktree add -b <branch> ../databricks-blueprints-<branch> main`, copy `dev.yml` in (below), and `npm install` in
+`app/frontend` for the app.
+1. `shared/` changes land on `main` with their tests, one session at a time; other tracks merge `main` before
    continuing.
 2. Each track edits only its own `PLAN.md`, plus its status line above. Cross-track asks go in the table below.
 3. Each bundle is deployed only from its own track's worktree: every worktree deploys to the same workspace path, so
    two deploys of one bundle overwrite each other.
 4. Billable resources have one owner (table below). Update the state column before turning anything on or off.
-5. Integration checks (browser, scenario Play, step 7, README) run on `real-time-search` after merging.
+5. Integration checks (browser, scenario Play, step 7, README) run after merging into `main`, with the app deployed
+   from `rts-app` once it has merged `main`.
 
 ## Shared resources
 
@@ -118,9 +123,10 @@ Checked by tests, not by sessions agreeing. Change one only under rule 1.
 - Superseded but kept (the user chose to keep them for now; ask before deleting): the old flat files in
   `/Workspace/Users/jon.cheung@databricks.com/real-time-search/` (`00_*`–`02_*`, `common.py`, `configs/`, ...).
   `_scratch/` was deleted 2026-11-01. UC objects didn't move.
-- Worktrees: gitignored files (`shared/configs/dev.yml`) aren't in a new worktree, so each has a **copy**. This
-  checkout's is the source of truth: change config here, then copy it to the worktree and redeploy the bundles that
-  read it. Check they match: `cmp shared/configs/dev.yml ~/GitHub/databricks-blueprints-rts-ml/real-time-search/shared/configs/dev.yml`.
+- Worktrees: gitignored files (`shared/configs/dev.yml`) aren't in a new worktree, so each has a **copy**. The main
+  checkout's is the source of truth: change config there, then copy it to the worktrees and redeploy the bundles that
+  read it. Check they match, from the main checkout's `real-time-search/`:
+  `for w in rts-app rts-ml; do cmp shared/configs/dev.yml ~/GitHub/databricks-blueprints-$w/real-time-search/shared/configs/dev.yml; done`.
 
 ## How we work
 - Tests first for local logic, from this folder: `uv run --no-project --with pytest --with pyyaml --with pandas --with numpy
