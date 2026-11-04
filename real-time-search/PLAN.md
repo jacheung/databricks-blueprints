@@ -15,7 +15,7 @@ Read this file, then the plan for your track only.
 
 | Track | Worktree and branch | Status |
 |---|---|---|
-| app | this checkout, branch `real-time-search` (also the integration branch) | QAC L1 + L2 demo with the Under-the-hood panel and the L2 inputs bar; L2 moves rows vs L1 (seen by the user); next: live-session L2 bench, user-history check, then the SERP column |
+| app | this checkout, branch `real-time-search` (also the integration branch) | QAC L1 + L2 demo: Under-the-hood panel, L2 inputs bar, keystroke → on screen timing; 20 ms debounce, L2 on CPU Medium (warm: 6% miss the 36 ms timeout); next: end-to-end target, user-history check, SERP column |
 | ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 done: DCNv2 v2 +0.065 NDCG@10 (≈ LightGBM); e2e CPU LightGBM 92 ms vs T4 DCNv2 101 ms p50 at 200; endpoints deleted |
 | data | no session; work from this checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
 
