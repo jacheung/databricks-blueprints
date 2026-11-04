@@ -11,12 +11,11 @@ the user. L2 moves rows vs L1 after Play. Debounce 20 ms; `rts-qac-l2` on CPU Me
 36 ms timeout (by ≤ 4 ms), but the first seconds after ~3–4 min idle run 70–170 ms, so warm it with a few queries
 before presenting. Session pipeline **running** (a stopped one makes Play time out with "landed: none").
 QAC moved into a dropdown under the search box (2026-11-04, checked in the browser by the user), freeing the area
-below for SERP.
+below for SERP. SERP L1 + L2 deployed below it (2026-11-04), with a Search → results on screen bar in the panel.
 
 ## Next
-1. SERP results below the search box (`/api/search`, HYBRID default): Hybrid L1 | L1 + L2 columns ("not deployed"
-   until SERP L2 is wired), embed/search timings in the header. With it, Enter or a picked completion searches, and
-   "Try …" fills the box, opens the dropdown, then Enter searches. SERP metrics in the Under-the-hood panel later.
+1. Check SERP in the browser: a full 200-candidate L2 call from the app (only the 1-candidate warm-up is verified,
+   719 ms cold), the result columns and the Search → results bar.
 2. Step 7: per-stage p50/p95 at typing pace and the L2 fallback rate; HYBRID vs ANN.
 Deferred (the user, 2026-11-04): the user-history check (open item below).
 
@@ -71,7 +70,17 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   the search box (same shared header, badges, inputs bar and L2 status). Opens on focus or typing; closes on Esc or
   when focus leaves the box. ↑/↓ + Enter move through Session-aware; a click picks from either column. A pick only
   fills the box for now (not timed as a keystroke); "Try …" focuses the box so the dropdown opens
-- [ ] UI search results column (below the search box, freed by the dropdown)
+- [ ] UI search results column (2026-11-04, deployed; not yet checked in the browser): Hybrid L1 | L1 + L2 columns
+  below the search box, top `SERP_N` = 10 each, with the QAC rank and intent badges; a line above gives hits and
+  embed / search / L2 / server ms. Enter, a picked completion, or "Try …" then Enter searches, with the session and
+  user ids.
+- [ ] SERP L2 in `/api/search` (2026-11-04, deployed; 3 tests, 76 pass): every L1 hit → `serp_l2_records` →
+  `rts-serp-l2` under the 200 ms `serp_l2` timeout on `L2_POOL`, falling back to the L1 order (`timeout` / `error`),
+  like QAC. App resource `serp-l2` (`CAN_QUERY`); warmed at startup (as the SP: 1 candidate, 719 ms cold, OK).
+- [ ] Search → results on screen bar in the Under-the-hood panel (2026-11-04, deployed; not yet checked in the
+  browser): Enter or pick → painted, no debounce: network + app, query embedding (L1), hybrid search (L1), L2 rerank,
+  render on a fixed 600 ms axis; footer compares server-side L1 vs L1 + L2 with `budgets_ms.serp_total_p95` (via
+  `/api/config`)
 - [x] Warm the embedding and QAC L2 clients at startup, in the background: the first search embedded in 78 ms
   (was 467 ms)
 - [x] `l2` carries only its status unless reranked (was a duplicate of `l1`: 200 products, ~2x payload)

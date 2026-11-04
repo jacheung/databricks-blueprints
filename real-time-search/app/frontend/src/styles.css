@@ -128,3 +128,9 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
 .seg.e2e-debounce, .key.e2e-debounce { background: var(--oat-medium); box-shadow: inset 0 0 0 1px var(--navy-300); }
 .seg.e2e-network, .key.e2e-network { background: var(--navy-300); }
 .seg.e2e-render, .key.e2e-render { background: var(--green-300); }
+/* SERP results under the search box (the QAC dropdown floats over them) */
+.serp { margin-top: 1.25rem; transition: opacity 120ms; }
+.serp.stale { opacity: 0.55; }
+.serp .columns { margin-top: 0.5rem; }
+.serp-timings { font-size: 0.82rem; color: var(--gray-text); margin: 1rem 0 0; font-variant-numeric: tabular-nums; }
+.seg.serp-embed, .key.serp-embed { background: var(--blue-600); }

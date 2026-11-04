@@ -184,9 +184,49 @@ function ScreenBar({ e2e }) {
   );
 }
 
+// From Enter (or a picked completion) until the results are painted: no debounce. Embed, search and L2 are the
+// response's own timings. The footer compares L1 alone with L1 + L2 server-side, the budget's measure.
+const SERP_SCALE_MS = 600;
+
+function SerpBar({ e2e, budget }) {
+  const status = e2e?.status;
+  const hasL2 = e2e?.l2 != null;
+  const l1 = e2e ? e2e.embed + e2e.search : undefined;
+  const parts = [
+    { key: "e2e-network", name: "Network + app", source: "round trip minus server time", ms: e2e?.network },
+    { key: "serp-embed", name: "Query embedding (L1)",
+      source: e2e?.embedding === "fallback_managed" ? "pay-per-token fallback" : "rts-query-embedding", ms: e2e?.embed },
+    { key: "l1", name: "Hybrid search (L1)", source: e2e ? `AI Search, ${e2e.hits} hits` : "AI Search", ms: e2e?.search },
+    { key: hasL2 && (status === "timeout" || status === "error") ? "l2-miss" : "l2",
+      name: status === "timeout" ? "L2 rerank, until the timeout" : "L2 rerank",
+      source: status === "timeout" ? "timed out; L1 order shown" : status === "error" ? "model serving · error"
+        : e2e ? `DCNv2, ${e2e.hits} candidates` : "DCNv2", ms: hasL2 ? e2e.l2 : undefined },
+    { key: "e2e-render", name: "Render", source: "response → painted frame", ms: e2e?.render },
+  ];
+  const over = (ms) => (budget && ms > budget ? "over" : undefined);
+  const footer = !e2e ? "Press Enter or pick a completion to time a search." : (
+    <>
+      Server-side: L1 <span className={over(l1)}>{round1(l1)} ms</span>
+      {hasL2 && <> · L1 + L2 <span className={over(l1 + e2e.l2)}>{round1(l1 + e2e.l2)} ms</span></>}
+      {budget && <> (budget {budget} ms p95)</>}
+    </>
+  );
+  return (
+    <Breakdown
+      title="Search → results on screen"
+      segments={e2e ? parts.filter((g) => g.ms !== undefined).map((g) => ({ key: g.key, label: g.name, ms: round1(g.ms) })) : []}
+      rows={parts.map((g) => ({ key: g.key, name: g.name, source: g.source,
+                                ms: g.ms !== undefined ? `${round1(g.ms)} ms` : EMPTY }))}
+      total={e2e ? `${round1(e2e.total)} ms` : EMPTY}
+      scale={SERP_SCALE_MS}
+      footer={footer}
+    />
+  );
+}
+
 // The side panel: how fast the replayed clicks reached the features and how fast a keystroke reaches the screen, then
 // what was replayed. The keystroke bar has a fixed axis; the clickstream bar fits its total.
-function UnderTheHood({ session, result, freshness, e2e }) {
+function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget }) {
   const typed = result?.prefix?.trim(); // the empty box is not a keystroke to time
   const freshScale = freshness?.status === "ready" ? Math.max(freshness.total_ms, 1) : 1;
   return (
@@ -194,6 +234,7 @@ function UnderTheHood({ session, result, freshness, e2e }) {
       <h2>Under the hood</h2>
       <ClickstreamBar session={session} freshness={freshness} scale={freshScale} />
       <ScreenBar e2e={typed ? e2e : null} />
+      <SerpBar e2e={serpE2e} budget={serpBudget} />
       {session && <Clickstream session={session} />}
     </section>
   );
@@ -373,6 +414,52 @@ function Column({ title, subtitle, items, note, shown, intent, onPick, listId, a
   );
 }
 
+// One SERP column: products in rank order, with L2's rank badges vs the L1 column's top `shown`.
+function ResultColumn({ title, subtitle, items, note, shown, intent }) {
+  const changes = items.map((h, i) => (shown === undefined ? null : rankChange(h, i + 1, shown)));
+  const diffed = changes.some((ch) => ch);
+  return (
+    <section className="column">
+      <header>
+        <h2>{title}</h2>
+        <p className="subtitle">{subtitle}</p>
+        {note && <p className="note">{note}</p>}
+        {diffed && <p className="summary">{diffSummary(changes)}</p>}
+      </header>
+      <ol>
+        {items.map((h, i) => (
+          <li key={h.product_id} className={changes[i] ? `change-${changes[i].kind}` : undefined}>
+            <span className="completion">
+              {h.title}
+              {changes[i]?.label && <span className={`badge ${changes[i].kind}`}>{changes[i].label}</span>}
+              {intentMatches(h, intent).map((m) => (
+                <span key={m} className="badge intent">{m}</span>
+              ))}
+            </span>
+            <span className="meta">
+              {[h.brand, h.category, h.price != null && `$${Number(h.price).toFixed(2)}`].filter(Boolean).join(" · ")}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+const SERP_EMBEDDING = { custom: "our endpoint", fallback_managed: "pay-per-token fallback" };
+
+function SerpTimings({ serp }) {
+  const t = serp.timings_ms;
+  const server = (t.embed ?? 0) + (t.search ?? 0) + (t.l2 ?? 0);
+  return (
+    <p className="serp-timings">
+      {serp.hits} hits for “{serp.query}” · embed {round1(t.embed)} ms ({SERP_EMBEDDING[serp.embedding] ?? serp.embedding})
+      · {serp.query_type.toLowerCase()} search {round1(t.search)} ms
+      {t.l2 !== undefined && <> · L2 {round1(t.l2)} ms</>} · <strong>{round1(server)} ms</strong> server-side
+    </p>
+  );
+}
+
 export default function App() {
   const [cfg, setCfg] = useState({ qac_debounce_ms: 80 });
   const [scenarios, setScenarios] = useState([]);
@@ -385,6 +472,10 @@ export default function App() {
   const [e2e, setE2e] = useState(null);
   const [open, setOpen] = useState(false); // the QAC dropdown
   const [active, setActive] = useState(-1); // its ↑/↓ row in Session-aware, -1 for none
+  const [serp, setSerp] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [serpE2e, setSerpE2e] = useState(null);
+  const latestSearch = useRef(0);
   const input = useRef(null);
   const latest = useRef(0);
   const keyAt = useRef(null); // event timestamp of the last keystroke (or "Try" click), on performance.now()'s clock
@@ -450,6 +541,23 @@ export default function App() {
     return () => cancelAnimationFrame(frame);
   }, [result]);
 
+  // Like the keystroke bar: wait two frames so the results are painted before stopping the clock.
+  useEffect(() => {
+    const c = serp?.clock;
+    if (!c) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        const painted = performance.now();
+        const t = serp.timings_ms;
+        const server = t.embed + t.search + (t.l2 ?? 0);
+        setSerpE2e({ network: Math.max(0, c.received - c.sent - server), embed: t.embed, search: t.search, l2: t.l2,
+                     render: painted - c.received, total: painted - c.sent, status: serp.l2?.status,
+                     hits: serp.hits, embedding: serp.embedding });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [serp]);
+
   const freshness = useFreshness(session);
   const userFeatures = useUserFeatures(session?.user_id);
   const l1 = result?.l1 ?? [];
@@ -457,11 +565,29 @@ export default function App() {
   const l2Items = l2.items ?? l1;
   const listed = open && l2Items.length > 0;
 
-  // Picking a completion fills the box and closes the dropdown (it isn't a keystroke, so it isn't timed).
+  // Searches with the current session, so L2 sees the same features QAC did; a newer search drops older responses.
+  function runSearch(text) {
+    if (!text.trim()) return;
+    const seq = ++latestSearch.current;
+    const params = new URLSearchParams({ q: text });
+    if (session) params.set("session_id", session.session_id);
+    if (session?.user_id) params.set("user_id", session.user_id);
+    setSearching(true);
+    setError(null);
+    const sent = performance.now(); // no debounce: the search starts on the Enter or pick itself
+    fetch(`/api/search?${params}`)
+      .then((r) => (r.ok ? r.json() : r.text().then((t) => Promise.reject(new Error(t)))))
+      .then((res) => seq === latestSearch.current && setSerp({ ...res, clock: { sent, received: performance.now() } }))
+      .catch((e) => seq === latestSearch.current && setError(`Search failed: ${e.message}`))
+      .finally(() => seq === latestSearch.current && setSearching(false));
+  }
+
+  // Picking a completion fills the box, closes the dropdown and searches (it isn't a keystroke, so it isn't timed).
   function pick(completion) {
     setQ(completion);
     setActive(-1);
     setOpen(false);
+    runSearch(completion);
   }
 
   function onKeyDown(e) {
@@ -471,6 +597,9 @@ export default function App() {
       setActive((a) => Math.max(-1, Math.min(l2Items.length - 1, a + (e.key === "ArrowDown" ? 1 : -1))));
     } else if (e.key === "Enter" && listed && l2Items[active]) {
       pick(l2Items[active].completion);
+    } else if (e.key === "Enter") {
+      setOpen(false);
+      runSearch(q);
     } else if (e.key === "Escape") {
       setOpen(false);
     }
@@ -480,7 +609,8 @@ export default function App() {
     <div className="page">
       {/* A side column, so the panel never moves the search bar */}
       <aside>
-        <UnderTheHood session={session} result={result} freshness={freshness} e2e={e2e} />
+        <UnderTheHood session={session} result={result} freshness={freshness} e2e={e2e} serpE2e={serpE2e}
+          serpBudget={cfg.serp_budget_ms} />
       </aside>
       <main>
         <h1>Real-time search</h1>
@@ -559,6 +689,25 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {serp && serp.l1.length > 0 && (
+          <section className={`serp${searching ? " stale" : ""}`}>
+            <SerpTimings serp={serp} />
+            <div className="columns">
+              <ResultColumn title="Hybrid L1" subtitle="AI Search: our query vector + keyword match on title and brand"
+                items={serp.l1} intent={session?.intent} />
+              <ResultColumn
+                title="L1 + L2"
+                subtitle="DCNv2 reranks all L1 hits with session, user and item features"
+                items={serp.l2.items ?? serp.l1}
+                note={L2_STATUS[serp.l2.status] ?? serp.l2.status}
+                shown={serp.l2.items ? serp.l1.length : undefined}
+                intent={session?.intent}
+              />
+            </div>
+          </section>
+        )}
+        {serp && serp.l1.length === 0 && <p className="serp-timings">No results for “{serp.query}”</p>}
       </main>
       <div />
     </div>
