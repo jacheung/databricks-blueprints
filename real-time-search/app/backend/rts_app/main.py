@@ -175,8 +175,7 @@ app = FastAPI(title="real-time-search")
 
 @app.get("/api/config")
 def config():
-    return {"qac_debounce_ms": APP["qac_debounce_ms"], "qac_n": QAC_N, "qac_budget_ms": CFG["budgets_ms"]["qac_total_p95"],
-            "l2_inputs": L2_INPUTS}
+    return {"qac_debounce_ms": APP["qac_debounce_ms"], "qac_n": QAC_N, "l2_inputs": L2_INPUTS}
 
 
 def _warm():

@@ -6,7 +6,7 @@ Update this file, plus this track's one status line in the top-level file, at th
 
 ## Status
 **Status as of 2026-11-04:** QAC L1 + L2 demo deployed: Under-the-hood panel (clickstream → features, keystroke →
-completions, keystroke → on screen), intent timeline, L2 rank badges and the L2 inputs bar, checked in the browser by
+on screen), intent timeline, L2 rank badges and the L2 inputs bar, checked in the browser by
 the user. L2 moves rows vs L1 after Play. Debounce 20 ms; `rts-qac-l2` on CPU Medium: warm, 6% of L2 calls miss the
 36 ms timeout (by ≤ 4 ms), but the first seconds after ~3–4 min idle run 70–170 ms, so warm it with a few queries
 before presenting. Session pipeline **running** (a stopped one makes Play time out with "landed: none").
@@ -140,11 +140,11 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
     carries that event's event_time and was committed after it. Stages end at timestamps, add up to the total, and
     are clamped at 0 (app vs pipeline clock); categories the timed click didn't touch show "earlier event". No
     "Before" column: Play starts a fresh session
-  - "Keystroke → completions": L1, L2 and, on a timeout, the overrun (the UI fetches the call's full time from
-    `/api/qac/{request_id}/l2_time`, `RecentValues`, 1 test) hatched past the 40 ms budget line; axis fixed at 60 ms
-    (the user: covers p99; slower ones clip with ▸). Overrun drawing not yet checked in the browser
-  - "Keystroke → on screen": debounce, network + app, server, render (latency above); fits its own total, no budget
-    line until there's an end-to-end target
+  - "Keystroke → on screen" (2026-11-04, checked in the browser by the user; replaced a separate "Keystroke →
+    completions" bar): debounce, network + app, L1, L2, render. L2 is red when it reranks, red-hatched when it
+    didn't (timeout or error). The overrun after a timeout isn't waited for (L1 order already shown), so it's text on
+    the L2 row: "finished at N ms" (fetched from `/api/qac/{request_id}/l2_time`, `RecentValues`, 1 test). Axis fixed
+    at 160 ms (slower ones clip with ▸). No target line or summary footer (the user)
   - Planted intent and the replayed clickstream, newest first
   - Online tables: in the Postgres database named after the catalog (`main`), not `lakebase.database` (synced tables
     only); the app has a second pool for it (`features_database`, 1 test). Found by a column only they hold

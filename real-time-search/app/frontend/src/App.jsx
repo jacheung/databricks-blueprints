@@ -87,9 +87,9 @@ function useL2FullTime(requestId, status) {
 
 const round1 = (ms) => Math.round(ms * 10) / 10;
 
-// Fixed keystroke axis: covers the measured p99 end to end (L1 4.8 + L2 36.5-40.7 ms back to back; typing-pace calls
-// 32-56 ms), so the 40 ms budget line stays put. Slower keystrokes clip at full width with the real ms in the rows.
-const KEYSTROKE_SCALE_MS = 60;
+// Fixed keystroke axis (~120 ms measured at the 20 ms debounce), so bar lengths compare across keystrokes. Slower
+// keystrokes clip at full width with the real ms in the rows.
+const SCREEN_SCALE_MS = 160;
 const STAGE_KEYS = ["fs-kafka", "fs-rtm", "fs-lakebase", "fs-read"];
 
 // A bar with its total, then one row per segment: colour key, name, where the time comes from, ms.
@@ -151,94 +151,49 @@ function ClickstreamBar({ session, freshness, scale }) {
   );
 }
 
-function KeystrokeBar({ result, status, l2Full, scale, budget }) {
-  const t = result?.timings_ms;
-  const l1 = t?.l1;
-  const l2 = t?.l2; // on a timeout, the time until the request gave up on it
-  const l2Key = status === "timeout" ? "l2-timeout" : status === "error" ? "l2-error" : "l2";
-  const late = l2Full > l2;
-  const segments = [];
-  if (t) {
-    segments.push({ key: "l1", label: "L1", ms: l1 });
-    if (l2 !== undefined) segments.push({ key: l2Key, label: "L2", ms: l2 });
-    if (late) segments.push({ key: "l2-late", label: "L2 after the timeout", ms: l2Full - l2 });
-  }
-  const rows = [
-    { key: "l1", name: "L1 lookup", source: t ? `Lakebase prefix “${result.prefix}”` : "Lakebase prefix table",
-      ms: t ? `${l1} ms` : EMPTY },
-    { key: t && l2 !== undefined ? l2Key : "l2", name: status === "timeout" ? "L2 rerank, until the timeout" : "L2 rerank",
-      source: status === "error" ? "model serving · error" : "model serving", ms: l2 !== undefined ? `${l2} ms` : EMPTY },
-    { key: "l2-late", name: "L2 after the timeout",
-      source: late ? `finished at ${l2Full} ms; L1 order shown` : "only when L2 misses the timeout",
-      ms: late ? `+${round1(l2Full - l2)} ms` : EMPTY },
-  ];
-  const served = t ? l1 + (l2 ?? 0) : 0;
-  const full = t ? l1 + Math.max(l2 ?? 0, l2Full ?? 0) : 0;
-  const over = full - budget;
-  return (
-    <Breakdown
-      title="Keystroke → completions"
-      segments={segments}
-      rows={rows}
-      total={t ? `${round1(full)} ms` : EMPTY}
-      totalClass={t && over > 0 ? "over" : undefined}
-      scale={scale}
-      budget={budget}
-      markerLabel={`${budget} ms budget`}
-      footer={
-        !t ? (
-          "Type in the search bar to time each keystroke."
-        ) : over > 0 ? (
-          <span className="over">
-            Served in {round1(served)} ms; L1 + L2 took {round1(full)} ms, {round1(over)} ms over the {budget} ms budget.
-          </span>
-        ) : (
-          `Served in ${round1(served)} ms, ${round1(-over)} ms under the ${budget} ms budget.`
-        )
-      }
-    />
-  );
-}
-
-// What the user waits for: from the keystroke event until its completions are painted. Browser clocks only; the server
-// part is the response's own timings, so "network + app" is the rest of the round trip (proxy, TLS, FastAPI, JSON).
+// What the user waits for: from the keystroke event until its completions are painted. Browser clocks, except L1 and
+// L2, which are the response's own timings; "network + app" is the rest of the round trip (proxy, TLS, FastAPI, JSON).
+// L2 is hatched when it didn't kick in (timeout or error). After a timeout the L1 order is already on screen, so L2's
+// overrun is text only.
 function ScreenBar({ e2e }) {
-  const parts = e2e && [
-    { key: "e2e-debounce", label: "Debounce", source: "browser waits for a pause", ms: e2e.debounce },
-    { key: "e2e-network", label: "Network + app", source: "round trip minus server time", ms: e2e.network },
-    { key: "l1", label: "Server (L1 + L2)", source: "timings_ms, as in the bar above", ms: e2e.server },
-    { key: "e2e-render", label: "Render", source: "response → painted frame", ms: e2e.render },
+  const l2Full = useL2FullTime(e2e?.request_id, e2e?.status);
+  const status = e2e?.status;
+  const hasL2 = e2e?.l2 != null; // on a timeout, the time until the request gave up on it
+  const l2Key = status === "timeout" || status === "error" ? "l2-miss" : "l2";
+  const l2Source = status === "error" ? "model serving · error"
+    : status === "timeout" ? (l2Full > e2e.l2 ? `finished at ${l2Full} ms; L1 order shown` : "timed out; L1 order shown")
+    : "model serving";
+  const parts = [
+    { key: "e2e-debounce", name: "Debounce", source: "browser waits for a pause", ms: e2e?.debounce },
+    { key: "e2e-network", name: "Network + app", source: "round trip minus server time", ms: e2e?.network },
+    { key: "l1", name: "L1 lookup", source: e2e ? `Lakebase prefix “${e2e.prefix}”` : "Lakebase prefix table",
+      ms: e2e?.l1 },
+    { key: hasL2 ? l2Key : "l2", name: status === "timeout" ? "L2 rerank, until the timeout" : "L2 rerank",
+      source: l2Source, ms: hasL2 ? e2e.l2 : undefined },
+    { key: "e2e-render", name: "Render", source: "response → painted frame", ms: e2e?.render },
   ];
-  const rows = (parts ?? [
-    { key: "e2e-debounce", label: "Debounce", source: "browser waits for a pause" },
-    { key: "e2e-network", label: "Network + app", source: "round trip minus server time" },
-    { key: "l1", label: "Server (L1 + L2)", source: "timings_ms, as in the bar above" },
-    { key: "e2e-render", label: "Render", source: "response → painted frame" },
-  ]).map((g) => ({ key: g.key, name: g.label, source: g.source, ms: parts ? `${round1(g.ms)} ms` : EMPTY }));
   return (
     <Breakdown
       title="Keystroke → on screen"
-      segments={parts ?? []}
-      rows={rows}
+      segments={e2e ? parts.filter((g) => g.ms !== undefined).map((g) => ({ key: g.key, label: g.name, ms: round1(g.ms) })) : []}
+      rows={parts.map((g) => ({ key: g.key, name: g.name, source: g.source,
+                                ms: g.ms !== undefined ? `${round1(g.ms)} ms` : EMPTY }))}
       total={e2e ? `${round1(e2e.total)} ms` : EMPTY}
-      scale={e2e ? Math.max(e2e.total, 1) : 1}
-      footer={e2e ? "Measured in this browser, last keystroke only; no end-to-end target set yet." : "Type in the search bar to time what you see."}
+      scale={SCREEN_SCALE_MS}
     />
   );
 }
 
-// The side panel: how fast the replayed clicks reached the features and how fast a keystroke is answered, then what
-// was replayed. The keystroke bar has a fixed axis so the budget line never moves; the clickstream bar fits its total.
-function UnderTheHood({ session, result: qacResult, status, budget, freshness, e2e }) {
-  const result = qacResult?.prefix?.trim() ? qacResult : null; // the empty box is not a keystroke to time
-  const l2Full = useL2FullTime(result?.request_id, status);
+// The side panel: how fast the replayed clicks reached the features and how fast a keystroke reaches the screen, then
+// what was replayed. The keystroke bar has a fixed axis; the clickstream bar fits its total.
+function UnderTheHood({ session, result, freshness, e2e }) {
+  const typed = result?.prefix?.trim(); // the empty box is not a keystroke to time
   const freshScale = freshness?.status === "ready" ? Math.max(freshness.total_ms, 1) : 1;
   return (
     <section className="hood">
       <h2>Under the hood</h2>
       <ClickstreamBar session={session} freshness={freshness} scale={freshScale} />
-      <KeystrokeBar result={result} status={status} l2Full={l2Full} scale={KEYSTROKE_SCALE_MS} budget={budget} />
-      <ScreenBar e2e={result ? e2e : null} />
+      <ScreenBar e2e={typed ? e2e : null} />
       {session && <Clickstream session={session} />}
     </section>
   );
@@ -488,7 +443,8 @@ export default function App() {
         const server = t.l1 + (t.l2 ?? 0);
         const debounce = c.sent - c.pressed;
         setE2e({ debounce, network: Math.max(0, c.received - c.sent - server), server,
-                 render: painted - c.received, total: painted - c.pressed });
+                 render: painted - c.received, total: painted - c.pressed,
+                 l1: t.l1, l2: t.l2, status: result.l2?.status, request_id: result.request_id, prefix: result.prefix });
       });
     });
     return () => cancelAnimationFrame(frame);
@@ -524,8 +480,7 @@ export default function App() {
     <div className="page">
       {/* A side column, so the panel never moves the search bar */}
       <aside>
-        <UnderTheHood session={session} result={result} status={l2.status} budget={cfg.qac_budget_ms ?? 40}
-          freshness={freshness} e2e={e2e} />
+        <UnderTheHood session={session} result={result} freshness={freshness} e2e={e2e} />
       </aside>
       <main>
         <h1>Real-time search</h1>

@@ -89,12 +89,10 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
 .seg:first-child { border-radius: 5px 0 0 5px; }
 .seg.l1, .key.l1 { background: var(--navy-600); }
 .seg.l2, .key.l2 { background: var(--lava-600); }
-.seg.l2-timeout, .key.l2-timeout { background: var(--yellow-600); }
-.seg.l2-late, .key.l2-late { background: repeating-linear-gradient(135deg, var(--maroon-600) 0 3px, var(--lava-300) 3px 6px); }
+.seg.l2-miss, .key.l2-miss { background: repeating-linear-gradient(135deg, var(--lava-600) 0 3px, var(--lava-300) 3px 6px); }
 .seg:last-child { border-radius: 0 5px 5px 0; }
 .seg:only-child { border-radius: 5px; }
 .over { color: var(--maroon-700); font-weight: 600; }
-.seg.l2-error, .key.l2-error { background: var(--maroon-700); }
 .marker { position: absolute; top: -3px; bottom: -3px; border-left: 2px dashed var(--navy-800); }
 .marker span { position: absolute; top: -1.15rem; left: -2rem; width: 4rem; text-align: center; font-size: 0.68rem; color: var(--gray-text); }
 .legend { font-size: 0.78rem; color: var(--gray-text); margin: 0.3rem 0 0; }
