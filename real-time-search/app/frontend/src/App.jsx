@@ -740,11 +740,15 @@ export default function App() {
 
         {/* Focus leaving the box and its dropdown closes it; mousedown inside the dropdown keeps focus in the box */}
         <div className="searchbox" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
+          <svg className="search-icon" viewBox="0 0 24 24" aria-hidden>
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <line x1="15.5" y1="15.5" x2="21" y2="21" />
+          </svg>
           <input
             ref={input}
             className="search"
             autoFocus
-            placeholder="Start typing…"
+            placeholder="Search"
             value={q}
             role="combobox"
             aria-expanded={listed}

@@ -46,6 +46,10 @@ button.link { padding: 0; border: 0; background: none; color: var(--lava-700); f
   display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
 /* QAC dropdown: both columns in one panel under the search box, floating over what's below */
 .searchbox { position: relative; }
+.search-icon { position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); width: 1.15rem; height: 1.15rem;
+  fill: none; stroke: var(--gray-text); stroke-width: 2.2; stroke-linecap: round; pointer-events: none; }
+.searchbox .search { padding-left: 2.6rem; }
+.search::placeholder { color: var(--navy-300); }
 .dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; padding: 0.4rem 0;
   background: var(--white); border: 1px solid var(--gray-lines); border-radius: 8px;
   box-shadow: 0 6px 20px rgb(27 49 57 / 14%); }
