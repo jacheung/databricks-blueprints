@@ -12,10 +12,11 @@ table below the columns is gone (the inputs bar replaces it). Session pipeline *
 UTC, which made every Play time out with "landed: none" until it was restarted (23:04) and caught up (~4 min).
 
 ## Next
-1. While the pipeline is up: `/api/bench/qac_l2` with a live session (does a hit lookup cost more than a miss?).
-2. User history (open item below): score a logged-in scenario's next query with and without `user_id`.
-3. UI search results column (`/api/search`, HYBRID default).
-4. Step 7: per-stage p50/p95 at typing pace (not only back-to-back) and the L2 fallback rate; HYBRID vs ANN.
+1. Re-check the L2 timeout share on CPU Medium at the 20 ms debounce (Small: 6/18 calls over 36 ms vs 1/8 at 80 ms).
+2. Set an end-to-end target (keystroke → on screen p95) from the browser timings; write it next to the 40 ms server budget.
+3. User history (open item below): score a logged-in scenario's next query with and without `user_id`.
+4. UI search results column (`/api/search`, HYBRID default).
+5. Step 7: per-stage p50/p95 at typing pace and the L2 fallback rate; HYBRID vs ANN.
 
 ## Open items
 - User history in the demo: half the scenarios are logged in and the simulator reuses a user's long-term intent in 70%
@@ -86,7 +87,21 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
     measures at typing pace and reports the fallback rate
 - [x] Streaming pipeline running during Play, so replayed events reach session features (2026-11-03: all 3 tables land,
   timed in the panel)
-- [ ] Re-run `/api/bench/qac_l2` with a live session (hit vs miss lookup cost)
+- [x] `/api/bench/qac_l2` with a live session (2026-11-04; `demo-73da6d226d` / `u003858`, a row in all 7 session and
+  user tables). p50 / p95 ms, 1 → 20 candidates: miss back-to-back 28.0/34.5 → 28.6/34.8; hit back-to-back 26.7/30.8 →
+  28.7/34.8; miss at a 300 ms gap (`gap_ms`, n=30) 28.4/31.8 → 29.9/35.1; hit at 300 ms gap 28.7/32.7 → 30.1/36.7.
+  Hits cost nothing extra, a 300 ms idle gap ~1 ms, 20 candidates ~1-2 ms: the cost is a fixed per-call floor (min
+  23.5 ms), so p95 ~35-37 ms sits at the 36 ms timeout and ~1 in 20 keystrokes falls back by design. Unknown: whether a
+  miss still runs the lookups (if so, this measures only the cost of finding rows)
+- [x] Keystroke → on screen bar (2026-11-04, deployed; numbers read by the user, 10+ queries, stable): browser-timed
+  from the keystroke event to the painted frame: debounce 81.9, network + app 53.4 (round trip minus `timings_ms`),
+  server 34.3, render 6.3 = 175.9 ms. The server is a fifth of it. Only keystroke-triggered requests are timed
+- [x] Debounce 80 → 20 ms (2026-11-04; the user: "feels super snappy"). The 80 ms debounce dropped half the requests
+  for a fast typist ("wireless earbuds": 8 requests for 16 keys; at 20 ms one per key). On CPU Small the extra
+  requests queued: 6/18 L2 calls over 36 ms (max 103) vs 1/8 (logs; small samples, part of the 20 ms run rolled out of
+  the log window), so `rts-qac-l2` went to CPU Medium; it was also found with scale-to-zero on, now off. The ml
+  track's `ensure_endpoint` applies config only on a new model version, so size/scale changes reach an existing
+  endpoint only by recreation or a manual `update-config`
 - [ ] Demo: replayed scenarios flip the right column vs L1 (2026-11-03: the user sees rank badges and NEW rows after
   Play; not yet checked across scenarios)
 - [x] Latency and freshness bars (2026-11-03; freshness checked in the browser by the user with the pipeline on). QAC: a
@@ -143,4 +158,5 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
 
 ### Step 7: Benchmark
 - [ ] `07_latency_bench`: per-stage p50/p95, L1-only vs L1+L2. Started: `/api/bench/qac_l1` and `/api/bench/qac_l2`
-  (back-to-back, from inside the app); still needed: typing pace, fallback rate, SERP embed + search
+  (back-to-back, from inside the app); `gap_ms` adds typing pace (idle before each call, untimed; 1 test). Still
+  needed: fallback rate, SERP embed + search

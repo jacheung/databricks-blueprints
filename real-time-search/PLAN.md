@@ -5,7 +5,9 @@ decisions. Each track keeps its own checklist: [data/PLAN.md](data/PLAN.md), [ml
 [app/PLAN.md](app/PLAN.md). Deferred scope lives in [PARKING_LOT.md](PARKING_LOT.md).
 
 **Question:** Does a session-aware L2 reranker improve QAC and SERP relevance enough to justify its latency, and can
-Databricks serve both within real-time budgets (QAC < 40 ms, SERP < 400 ms, feature freshness < 1 s)?
+Databricks serve both within real-time budgets (QAC < 40 ms, SERP < 400 ms, both server-side p95 measured in the app;
+feature freshness < 1 s)? What the user waits for (debounce + network + server + render) is timed in the browser
+separately; no end-to-end target yet.
 
 ## Start here (new session)
 
@@ -32,7 +34,7 @@ Read this file, then the plan for your track only.
 |---|---|---|
 | `rts-vs-endpoint` + `products_hybrid_idx` (Standard; bills hourly) | ml | ONLINE (kept overnight: the workspace is at its 500-endpoint quota) |
 | `rts-query-embedding` (T4, route-optimized) | ml | READY since 2026-11-03 |
-| `rts-qac-l2` (CPU, route-optimized) | ml | READY since 2026-11-03 |
+| `rts-qac-l2` (CPU Medium, route-optimized, no scale-to-zero) | ml | READY since 2026-11-03; Small → Medium and scale-to-zero (found on) → off on 2026-11-04 for the 20 ms debounce |
 | Session pipeline `b2e71ddb-8541-4ffa-8c4e-82ecbeca22da` (continuous, Real-Time Mode → Lakebase session tables) | data | **Running since 2026-11-03** (app freshness-bar and Play check); stop right after |
 | Kafka ingestion pipeline `1fa949e7-2477-4306-9898-66f992328abf` (continuous, topic → `session_events_ingest`) | data | **Running since 2026-10-30**; only training/offline features need it, not the app |
 | Hourly user/item batch materializations (Feature Store-managed jobs, ~7 min/run, ~6 tables) | data | Unpaused; pausing them not yet checked |
