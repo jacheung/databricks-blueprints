@@ -10,6 +10,26 @@ Update this file, plus this track's one status line in the top-level file, at th
   trade-off goes in the README. Parked: gate B / feature C (step 5).
 - **SERP L1:** hybrid recall@200 0.876. Query embedding moves off pay-per-token to `rts-query-embedding` (T4,
   `gte_large_en_v1_5_raw`), verified to return the same results (step 3).
+- **SERP L2:** `main.jon_cheung.serp_ranker_dcnv2` v2 (DCNv2) and `serp_ranker_lgbm` v1 (LightGBM comparator)
+  registered. NDCG@10 on test: L1 0.224 → LightGBM 0.287 / DCNv2 0.289 (+0.065; DCNv2 − LightGBM +0.002, CI spans 0).
+  Most of the lift isn't personalization (see step 6). End-to-end from a laptop at 200 candidates: LightGBM CPU p50
+  92.5 ms, DCNv2 T4 100.8 ms; the same laptop reaches `rts-qac-l2` in ~72 ms (in-app ~28), so in-app SERP L2 is
+  estimated at ~45–50 ms. Both endpoints deleted. The user, 2026-11-04: the lift is enough, no more features or data
+
+## Next
+1. **Decide which SERP L2 model the app serves** (the user): DCNv2 on the T4 (the plan) or LightGBM on CPU (same
+   NDCG, ~8 ms faster end-to-end, cheaper). `l2_endpoint` serves either (`variant=lgbm`)
+2. **Recreate the chosen endpoint when the app is ready to wire it** (cross-track ask in the top-level plan), delete it
+   when not testing. DCNv2: `bundle run serp_l2_job -t dev -p e2-demo-fe --only serp_l2_endpoint` (~35 min to READY);
+   LightGBM: `--only serp_l2_lgbm_endpoint`
+3. **`retrieval_job` end-to-end:** each task has passed on its own, never the job as a whole. Rerun it, or reword that box
+4. **`rts-qac-l2` box (step 5):** written against a 25 ms timeout; the timeout is now 36 ms and the app measured p95
+   33.6–37.9 ms on Small (now Medium). Re-check on Medium and tick or reword
+5. **Step 7:** in-app SERP L2 latency (replaces the laptop estimate) and the README numbers, with the caveats: exposure
+   bias (only judged products are ever clicked, which inflates item popularity), mild L1 popularity leakage, and the
+   sim's intent never drifting within a session
+6. Parked: brand counts (`(session, brand)` / `(user, brand)`), an item-popularity ablation, the 5.5 h hang if it
+   recurs
 
 ## Checklist
 

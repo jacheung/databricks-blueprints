@@ -102,6 +102,7 @@ Checked by tests, not by sessions agreeing. Change one only under rule 1.
 | Online table names for the session features (session panel) | app | data | done by the app: found in Postgres database `main` (named after the catalog) via `pg_catalog` |
 | Possible train/serve skew: online `sess_last_event_type` is the last click/cart (2026-11-03: sc1 ends `back`, sc5 `search`, both online `click`), but `feature_specs` defines it over all events. Check what training saw | app | data, ml | ml answered 2026-11-04: training always saw `search` (offline `ColumnSelection` includes the event at the label time; window counts exclude it), so the skew is real. SERP L2 drops the feature; QAC can't be affected (constant in training, LightGBM never split on it). Open for data: intended semantics |
 | `rts-qac-l2` session lookups checked from the app via scenario Play | ml | app | open |
+| Wire SERP L2 into `/api/search`: L1 hits → `serp_l2_records` (session, user, candidates) → endpoint under the 200 ms `serp_l2` timeout, falling back to the L1 order. Model choice is pending (ml Next #1); ml recreates the endpoint on request | ml | app | open |
 
 ## Where things are
 - Local code: this folder. Bundles deploy to `/Workspace/Users/jon.cheung@databricks.com/real-time-search/<bundle>/files/`
