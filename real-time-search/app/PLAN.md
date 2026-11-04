@@ -12,10 +12,8 @@ the user. L2 moves rows vs L1 after Play. Debounce 20 ms; `rts-qac-l2` on CPU Me
 before presenting. Session pipeline **running** (a stopped one makes Play time out with "landed: none").
 
 ## Next
-1. Check keystroke → on screen against the 120 ms p95 target (decision log) at the 20 ms debounce: a few readings
-   from the bar (estimated ~113 ms). The bar shows no target line yet.
-2. UI search results column (`/api/search`, HYBRID default).
-3. Step 7: per-stage p50/p95 at typing pace and the L2 fallback rate; HYBRID vs ANN.
+1. UI search results column (`/api/search`, HYBRID default).
+2. Step 7: per-stage p50/p95 at typing pace and the L2 fallback rate; HYBRID vs ANN.
 Deferred (the user, 2026-11-04): the user-history check (open item below).
 
 ## Open items
@@ -104,7 +102,10 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   10+ queries, stable): at an 80 ms debounce, debounce 81.9 + network and app 53.4 (round trip minus `timings_ms`) +
   server 34.3 + render 6.3 = 175.9 ms. The server is a fifth of it. Only keystroke-triggered requests are timed
 - [x] Debounce 80 → **20 ms** (2026-11-04; the user: "feels super snappy"). 80 ms dropped half a fast typist's
-  requests ("wireless earbuds": 8 requests for 16 keys; at 20 ms one per key), so per-keystroke QPS sizes the endpoint
+  requests ("wireless earbuds": 8 requests for 16 keys; at 20 ms one per key), so per-keystroke QPS sizes the endpoint.
+  At 20 ms, keystroke → on screen reads ~120 ± 10–20 ms (the user; one reading: debounce 21.2 + network and app 54.1
+  + server 35.9 + render 9.1 = 120.3): the 120 ms target is met typically, not at p95. Kept at 20 ms (the user: good
+  enough); debounce 0 (~20 ms less) was the option not taken
 - [x] `rts-qac-l2` CPU Small → **Medium**, scale-to-zero (found on) → off (2026-11-04; top-level decision log). From the
   app logs, L2 calls over the 36 ms timeout at a 20 ms debounce:
 
