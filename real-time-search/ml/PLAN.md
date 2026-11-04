@@ -16,18 +16,18 @@ Update this file, plus this track's one status line in the top-level file, at th
   served. NDCG@10 on test: L1 0.224 → LightGBM 0.287 / DCNv2 0.289 (+0.065; DCNv2 − LightGBM +0.002, CI spans 0).
   Most of the lift isn't personalization (step 6). The user: the lift is enough, no more features or data. Whole SERP
   path from a laptop (embed → hybrid L1 top 200 → L2): p50 444 / p95 502 ms vs the 400 ms budget; without the WAN
-  round trip per call, in-app p95 is estimated at ~360–370 ms (step 6). `rts-serp-l2` bills while it exists
+  round trip per call, in-app p95 is estimated at ~360–370 ms (step 6). `rts-serp-l2` bills while it exists. The LightGBM endpoint task (`serp_l2_lgbm_endpoint`) stays in `serp_l2_job`
+  to swap models if needed (the user, 2026-11-04)
 
 ## Next
 1. **App wires `rts-serp-l2` (DCNv2, T4)**: up since 2026-11-03 (cross-track ask). Deleting an endpoint drops its
    permissions, so the app bundle must be redeployed after any recreation to re-grant the app SP. Delete and
    recreate it with the top-level pause/resume runbook (`real-time-search`, `e11112a`; lists `rts-serp-l2`); recreate alone:
    `bundle run serp_l2_job -t dev -p e2-demo-fe --only serp_l2_endpoint`
-2. **`retrieval_job` end-to-end:** each task has passed on its own, never the job as a whole. Rerun it, or reword that box
-3. **Step 7:** in-app SERP latency per stage (vs the laptop baseline in step 6) and the README numbers, with the
+2. **Step 7:** in-app SERP latency per stage (vs the laptop baseline in step 6) and the README numbers, with the
    caveats: exposure bias (only judged products are ever clicked, which inflates item popularity), mild L1
    popularity leakage, and the sim's intent never drifting within a session
-4. Parked: brand counts (`(session, brand)` / `(user, brand)`), an item-popularity ablation, the 5.5 h hang if it
+3. Parked: brand counts (`(session, brand)` / `(user, brand)`), an item-popularity ablation, the 5.5 h hang if it
    recurs
 
 ## Checklist
@@ -69,7 +69,9 @@ Update this file, plus this track's one status line in the top-level file, at th
   - Written (title + brand text, hybrid vs vector-only, k = 200); `products_search` built. Was blocked on the 500-endpoint
     quota; Akil Thomas freed two slots 2026-11-02. `rts-vs-endpoint` (Standard) created 23:35Z on the third retry: the
     quota freed ~25 min after the deletes, and slots go fast. The notebook now claims the endpoint before the source build
-- [ ] `ml/resources/retrieval.job.yml` deployed and green
+- [x] `ml/resources/retrieval.job.yml` deployed; each task green on its own (`serp_l1_ai_search` run `640913679989299`,
+  `query_embedding_model` + `serp_query_embedding` run `345583074492262`, `qac_l1_lakebase` rerun 2026-11-02). Never
+  run as one job: not needed, the outputs exist and are checked (the user, 2026-11-04)
 
 ### Step 5: QAC L2 (LightGBM, CPU, route-optimized)
 Design agreed 2026-11-02, following the Feature Views best-practice blog
