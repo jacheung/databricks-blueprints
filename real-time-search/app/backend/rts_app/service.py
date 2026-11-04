@@ -97,12 +97,14 @@ def rows_to_dicts(columns: list[str], data_array: list[list] | None) -> list[dic
 
 
 def search(q: str, embed: Callable[[str], list[float]], query_index: Callable[..., list[dict]], query_type: str,
-           k: int, query_columns: list[str]) -> dict:
+           k: int, query_columns: list[str], rerank: Callable[[list[dict]], list[float]] | None = None,
+           n: int | None = None) -> dict:
     """SERP L1: embed on our endpoint, then query the index. If our endpoint fails, the index embeds the text itself
-    (pay-per-token), and `embedding` says so. The L2 column carries only its status until SERP L2 exists."""
+    (pay-per-token), and `embedding` says so. L2 reranks every hit (scores in hit order), as `qac` does; both
+    columns show their top `n`. Without an `ok` status the L2 column carries no items and the UI shows the L1 order."""
     text = q.strip()
     if not text:
-        return {"query": text, "query_type": query_type, "embedding": "skipped", "l1": [],
+        return {"query": text, "query_type": query_type, "embedding": "skipped", "hits": 0, "l1": [],
                 "l2": {"status": "not_deployed"}, "timings_ms": {}}
     t = time.perf_counter()
     try:
@@ -112,9 +114,23 @@ def search(q: str, embed: Callable[[str], list[float]], query_index: Callable[..
     t_embed = time.perf_counter()
     hits = query_index(**index_query(text, vector, query_type, k, query_columns))
     t_search = time.perf_counter()
-    return {"query": text, "query_type": query_type, "embedding": embedding, "l1": hits,
-            "l2": {"status": "not_deployed"},
-            "timings_ms": {"embed": round((t_embed - t) * 1000, 2), "search": round((t_search - t_embed) * 1000, 2)}}
+    timings = {"embed": round((t_embed - t) * 1000, 2), "search": round((t_search - t_embed) * 1000, 2)}
+    if rerank is None:
+        l2 = {"status": "not_deployed"}
+    elif not hits:
+        l2 = {"status": "ok", "items": []}
+    else:
+        try:
+            scores = rerank(hits)
+            order = sorted(range(len(hits)), key=lambda i: -scores[i])  # stable: ties keep the L1 order
+            l2 = {"status": "ok", "items": [{**hits[i], "l1_rank": i + 1} for i in order[:n]]}  # UI rank badges
+        except TimeoutError:
+            l2 = {"status": "timeout"}
+        except Exception:
+            l2 = {"status": "error"}
+        timings["l2"] = round((time.perf_counter() - t_search) * 1000, 2)
+    return {"query": text, "query_type": query_type, "embedding": embedding, "hits": len(hits), "l1": hits[:n],
+            "l2": l2, "timings_ms": timings}
 
 
 def play_scenario(scenario: dict, session_id: str, producer, topic: str, now: datetime,

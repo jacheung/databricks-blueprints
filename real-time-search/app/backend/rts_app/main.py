@@ -33,19 +33,22 @@ from rts_app.service import (latency_stats, play_scenario, qac, rows_to_dicts, s
 from rts_shared.config import full_name, load_config
 from rts_shared.kafka import producer as kafka_producer
 from rts_shared.lakebase import branch, features_database
-from rts_shared.retrieval import SERP_INDEX_COLUMNS, SERP_INDEX_TEXT, qac_l2_records
+from rts_shared.retrieval import SERP_INDEX_COLUMNS, SERP_INDEX_TEXT, qac_l2_records, serp_l2_records
 
 ROOT = Path(__file__).resolve().parents[3]  # app/backend/rts_app/main.py -> source root
 CFG = load_config(str(ROOT / os.environ.get("RTS_CONFIG", "shared/configs/dev.yml")))
 LB, APP, AI = CFG["lakebase"], CFG["app"], CFG["ai_search"]
 EMBED_ENDPOINT = CFG["models"]["query_embedding"]["endpoint"]
 QAC_L2 = CFG["models"]["qac_l2"]
+SERP_L2_ENDPOINT = CFG["models"]["serp_l2"]["endpoint"]
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("rts_app")
 QAC_L2_TIMEOUT_S = APP["timeouts_ms"]["qac_l2"] / 1000
+SERP_L2_TIMEOUT_S = APP["timeouts_ms"]["serp_l2"] / 1000
 L2_POOL = ThreadPoolExecutor(max_workers=8)  # timed-out calls finish here without holding the request
 SCHEMA = CFG["unity_catalog"]["schema"]
 QAC_N = 10
+SERP_N = 10
 L2_INPUTS = l2_inputs(CFG)
 w = WorkspaceClient()
 
@@ -118,6 +121,22 @@ def qac_l2_scores(rows: list[dict], session_id: str | None, user_id: str | None,
             L2_TIMES.record(request_id, round(ms, 2))
 
 
+def serp_l2_scores(hits: list[dict], session_id: str | None, user_id: str | None) -> list[float]:
+    # Same lookups as QAC L2 (session and user features by key), plus item features by product_id. Runs on L2_POOL.
+    t = time.perf_counter()
+    try:
+        scores = w.serving_endpoints_data_plane.query(
+            name=SERP_L2_ENDPOINT, dataframe_records=serp_l2_records(hits, session_id, user_id)).predictions
+    except Exception:
+        log.exception("serp_l2 call failed")
+        raise
+    finally:
+        log.info("serp_l2 call %.1f ms, %d candidates", (time.perf_counter() - t) * 1000, len(hits))
+    if len(scores) != len(hits):
+        raise ValueError(f"serp_l2 returned {len(scores)} scores for {len(hits)} hits")
+    return scores
+
+
 def query_index(**kw) -> list[dict]:
     r = w.vector_search_indexes.query_index(index_name=full_name(CFG, AI["index"]), columns=list(SERP_INDEX_COLUMNS),
                                             **kw)
@@ -175,13 +194,15 @@ app = FastAPI(title="real-time-search")
 
 @app.get("/api/config")
 def config():
-    return {"qac_debounce_ms": APP["qac_debounce_ms"], "qac_n": QAC_N, "l2_inputs": L2_INPUTS}
+    return {"qac_debounce_ms": APP["qac_debounce_ms"], "qac_n": QAC_N, "l2_inputs": L2_INPUTS,
+            "serp_budget_ms": CFG["budgets_ms"]["serp_total_p95"]}
 
 
 def _warm():
     try:
         embed("warm up")
         qac_l2_scores(prefix_rows("ca")[:1], None, None)
+        serp_l2_scores(query_index(query_type="ANN", query_vector=embed("warm up"), num_results=1), None, None)
     except Exception:
         logging.exception("endpoint warm-up failed; the first requests pay the connection cost")
 
@@ -210,9 +231,14 @@ def qac_l2_time(request_id: str):
 
 
 @app.get("/api/search")
-def get_search(q: str = "", mode: Literal["HYBRID", "ANN"] = "HYBRID", session_id: str | None = None):
+def get_search(q: str = "", mode: Literal["HYBRID", "ANN"] = "HYBRID", session_id: str | None = None,
+               user_id: str | None = None):
     # Keyword matching covers search_text only, as in serp_l1_ai_search's recall run.
-    return search(q, embed, query_index, mode, AI["serp_l1_k"], [SERP_INDEX_TEXT]) | {"session_id": session_id}
+    def rerank(hits):
+        return with_timeout(L2_POOL, lambda: serp_l2_scores(hits, session_id, user_id), SERP_L2_TIMEOUT_S)
+
+    return (search(q, embed, query_index, mode, AI["serp_l1_k"], [SERP_INDEX_TEXT], rerank, SERP_N)
+            | {"session_id": session_id, "user_id": user_id})
 
 
 @app.get("/api/bench/qac_l1")
