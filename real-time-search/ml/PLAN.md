@@ -15,20 +15,18 @@ Update this file, plus this track's one status line in the top-level file, at th
   Most of the lift isn't personalization (see step 6). End-to-end from a laptop at 200 candidates: LightGBM CPU p50
   92.5 ms, DCNv2 T4 100.8 ms; the same laptop reaches `rts-qac-l2` in ~72 ms (in-app ~28), so in-app SERP L2 is
   estimated at ~45–50 ms. Both endpoints deleted. The user, 2026-11-04: the lift is enough, no more features or data
+  **The app serves DCNv2 on the T4** (the user, 2026-11-03: to demonstrate GPU serving). `rts-serp-l2` recreated
+  2026-11-03 (READY in ~8 min this time), serving v2; smoke test from a laptop: 200 scores, guest scores differ, p50
+  111.7 ms over 20 calls. Bills while it exists: delete it when the app isn't testing
 
 ## Next
-1. **Decide which SERP L2 model the app serves** (the user): DCNv2 on the T4 (the plan) or LightGBM on CPU (same
-   NDCG, ~8 ms faster end-to-end, cheaper). `l2_endpoint` serves either (`variant=lgbm`)
-2. **Recreate the chosen endpoint when the app is ready to wire it** (cross-track ask in the top-level plan), delete it
-   when not testing. DCNv2: `bundle run serp_l2_job -t dev -p e2-demo-fe --only serp_l2_endpoint` (~35 min to READY);
-   LightGBM: `--only serp_l2_lgbm_endpoint`
-3. **`retrieval_job` end-to-end:** each task has passed on its own, never the job as a whole. Rerun it, or reword that box
-4. **`rts-qac-l2` box (step 5):** written against a 25 ms timeout; the timeout is now 36 ms and the app measured p95
-   33.6–37.9 ms on Small (now Medium). Re-check on Medium and tick or reword
-5. **Step 7:** in-app SERP L2 latency (replaces the laptop estimate) and the README numbers, with the caveats: exposure
-   bias (only judged products are ever clicked, which inflates item popularity), mild L1 popularity leakage, and the
-   sim's intent never drifting within a session
-6. Parked: brand counts (`(session, brand)` / `(user, brand)`), an item-popularity ablation, the 5.5 h hang if it
+1. **App wires `rts-serp-l2` (DCNv2, T4)**: up since 2026-11-03 (cross-track ask). Delete it when not testing;
+   recreate with `bundle run serp_l2_job -t dev -p e2-demo-fe --only serp_l2_endpoint`
+2. **`retrieval_job` end-to-end:** each task has passed on its own, never the job as a whole. Rerun it, or reword that box
+3. **Step 7:** in-app SERP latency per stage (vs the laptop baseline in step 6) and the README numbers, with the
+   caveats: exposure bias (only judged products are ever clicked, which inflates item popularity), mild L1
+   popularity leakage, and the sim's intent never drifting within a session
+4. Parked: brand counts (`(session, brand)` / `(user, brand)`), an item-popularity ablation, the 5.5 h hang if it
    recurs
 
 ## Checklist
@@ -128,8 +126,9 @@ a `DeltaTableSource` keyed on `completion` would add ~20 lookups inside the 25 m
 
     Brand lift shows (category+brand is the biggest slice lift), so brand option (b) isn't needed. No-intent sessions
     regress slightly: L2 reads intent into random clicks. Go/no-go: the user's call
-- [ ] Endpoint `rts-qac-l2` (CPU, route-optimized): online lookups work; p95 within the 25 ms L2 timeout at 20
-  candidates (else 10)
+- [x] Endpoint `rts-qac-l2` (CPU Medium, route-optimized): online lookups work; p95 at the L2 timeout (now 36 ms) at 20
+  candidates. Was written against 25 ms. App bench on Medium with a live session (app plan, 2026-11-04): p50 ~29 / p95
+  ~35-37 ms at 20 candidates, a fixed ~23.5 ms per-call floor, so ~1 in 20 keystrokes falls back to L1 by design
   - Created 2026-11-02 serving v1 (READY). `qac_l2_endpoint` (2nd task of `qac_l2_job`) deploys and asserts READY only:
     **route-optimized endpoints accept only OAuth tokens, and notebook credentials aren't OAuth** (`ValueError: OAuth
     tokens are not available for runtime authentication`). The CLI's `serving-endpoints query` doesn't use the
@@ -217,3 +216,17 @@ Design agreed 2026-11-03 (plan: ~/.claude/plans/streamed-fluttering-turing.md):
   The GPU buys nothing at this size: the model is tiny, and serving time is dominated by the request path, the
   online lookups (200 item keys) and the pandas crosses, not the matmuls. CPU LightGBM is ~8 ms faster at the same
   NDCG. Both fit the 200 ms `serp_l2` timeout; app-side numbers are step 7
+- [x] Whole SERP path from a laptop (`ml/scripts/bench_serp_path.py`, 2026-11-04): the app's calls in sequence, embed
+  on `rts-query-embedding` -> HYBRID `query_index` (text + vector, top 200) -> `serp_l2_records` -> `rts-serp-l2`
+  (DCNv2, T4). 100 distinct logged-in test searches after 5 warm-up, every one returned 200 hits and 200 scores:
+
+  | Stage | p50 / p95 / max (ms) |
+  |---|---|
+  | embed (T4) | 122.4 / 132.5 / 154.4 |
+  | L1 hybrid search | 216.1 / 266.1 / 361.0 |
+  | L2 DCNv2 (T4) | 101.9 / 124.4 / 178.5 |
+  | **total** | **444.0 / 501.6 / 600.5** |
+
+  Over the 400 ms `serp_total_p95` budget from a laptop. Each of the 3 calls pays the WAN round trip, which was ~45 ms
+  per call for `rts-qac-l2` (laptop ~72 vs app ~28 ms), so the in-app total p95 is estimated at ~360-370 ms: under
+  budget with little room. L1 search is half the time; it's the stage to look at if the app misses
