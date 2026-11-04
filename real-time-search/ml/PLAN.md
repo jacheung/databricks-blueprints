@@ -7,21 +7,22 @@ Update this file, plus this track's one status line in the top-level file, at th
 ## Status
 - **QAC L2:** `main.jon_cheung.qac_ranker_lgbm` v2 trained and registered (MRR@5 +0.059 overall, +0.101 on 2nd+
   searches, -0.015 on no-intent sessions; table in step 5). The user chose to ship it with no gate; the no-intent
-  trade-off goes in the README. Parked: gate B / feature C (step 5).
-- **SERP L1:** hybrid recall@200 0.876. Query embedding moves off pay-per-token to `rts-query-embedding` (T4,
-  `gte_large_en_v1_5_raw`), verified to return the same results (step 3).
-- **SERP L2:** `main.jon_cheung.serp_ranker_dcnv2` v2 (DCNv2) and `serp_ranker_lgbm` v1 (LightGBM comparator)
-  registered. NDCG@10 on test: L1 0.224 → LightGBM 0.287 / DCNv2 0.289 (+0.065; DCNv2 − LightGBM +0.002, CI spans 0).
-  Most of the lift isn't personalization (see step 6). End-to-end from a laptop at 200 candidates: LightGBM CPU p50
-  92.5 ms, DCNv2 T4 100.8 ms; the same laptop reaches `rts-qac-l2` in ~72 ms (in-app ~28), so in-app SERP L2 is
-  estimated at ~45–50 ms. Both endpoints deleted. The user, 2026-11-04: the lift is enough, no more features or data
-  **The app serves DCNv2 on the T4** (the user, 2026-11-03: to demonstrate GPU serving). `rts-serp-l2` recreated
-  2026-11-03 (READY in ~8 min this time), serving v2; smoke test from a laptop: 200 scores, guest scores differ, p50
-  111.7 ms over 20 calls. Bills while it exists: delete it when the app isn't testing
+  trade-off goes in the README. Served on `rts-qac-l2` (CPU Medium, route-optimized): p95 ~35–37 ms in the app vs
+  the 36 ms timeout. Parked: gate B / feature C (step 5).
+- **SERP L1:** hybrid recall@200 0.876. Query embedding moved off pay-per-token to `rts-query-embedding` (T4,
+  `gte_large_en_v1_5_raw`), verified to return the same results; the app uses it (step 3).
+- **SERP L2:** `main.jon_cheung.serp_ranker_dcnv2` v2 (DCNv2) is served on `rts-serp-l2` (T4, route-optimized; the
+  user, 2026-11-03: to demonstrate GPU serving). `serp_ranker_lgbm` v1 (LightGBM) is a registered comparator only, not
+  served. NDCG@10 on test: L1 0.224 → LightGBM 0.287 / DCNv2 0.289 (+0.065; DCNv2 − LightGBM +0.002, CI spans 0).
+  Most of the lift isn't personalization (step 6). The user: the lift is enough, no more features or data. Whole SERP
+  path from a laptop (embed → hybrid L1 top 200 → L2): p50 444 / p95 502 ms vs the 400 ms budget; without the WAN
+  round trip per call, in-app p95 is estimated at ~360–370 ms (step 6). `rts-serp-l2` bills while it exists
 
 ## Next
-1. **App wires `rts-serp-l2` (DCNv2, T4)**: up since 2026-11-03 (cross-track ask). Delete it when not testing;
-   recreate with `bundle run serp_l2_job -t dev -p e2-demo-fe --only serp_l2_endpoint`
+1. **App wires `rts-serp-l2` (DCNv2, T4)**: up since 2026-11-03 (cross-track ask). Deleting an endpoint drops its
+   permissions, so the app bundle must be redeployed after any recreation to re-grant the app SP. Delete and
+   recreate it with the top-level pause/resume runbook (`real-time-search`, `e11112a`; lists `rts-serp-l2`); recreate alone:
+   `bundle run serp_l2_job -t dev -p e2-demo-fe --only serp_l2_endpoint`
 2. **`retrieval_job` end-to-end:** each task has passed on its own, never the job as a whole. Rerun it, or reword that box
 3. **Step 7:** in-app SERP latency per stage (vs the laptop baseline in step 6) and the README numbers, with the
    caveats: exposure bias (only judged products are ever clicked, which inflates item popularity), mild L1
@@ -61,8 +62,8 @@ Update this file, plus this track's one status line in the top-level file, at th
     (`check_query_embedding.py`, 200 test queries): cosine 0.999999, norm gap ≤ 0.02% (norm ~24.2), hybrid top-200
     overlap 0.997 mean / 0.985 min. Hybrid isn't deterministic at the tail: the same text query twice overlaps 0.990
     min / 0.9992 mean, so the check allows mean ≥ 0.99, min ≥ 0.97. T4 embed from a laptop (WAN included): p50 91 /
-    p95 104 ms vs pay-per-token 166–812 ms. Next: the app embeds on the T4 and passes `query_text` + `query_vector`;
-    step 7 times embed and search separately
+    p95 104 ms vs pay-per-token 166–812 ms. Done: the app embeds on the T4 and passes `query_text` + `query_vector`
+    (`index_query` in `app/backend/rts_app/service.py`), timing embed and search separately
   - serving-bench's normalized `main.jon_cheung.gte_large_en_v1_5` (v1–v3) is kept (the user, 2026-11-02): unused here,
     nothing serves it, storage only
   - Written (title + brand text, hybrid vs vector-only, k = 200); `products_search` built. Was blocked on the 500-endpoint
@@ -110,7 +111,7 @@ a `DeltaTableSource` keyed on `completion` would add ~20 lookups inside the 25 m
   NDCG@5) in the pyfunc; `fe.log_model`. Samples 30K train / 10K test searches (config), not 50K: ~1.8M rows to pandas
 - [x] Eval, L1 vs L2, MRR@5 + success@1 with bootstrap 95% CIs, per slice: first vs 2nd+ search; guest vs logged-in;
   prefix 1/2/3; intent none / category / category+brand. Plus the ceiling (submitted query in L1 top 20). Go/no-go
-  before the endpoint
+  before the endpoint: go (shipped with no gate)
   - Results (test split, paired bootstrap 95% CI), `qac_ranker_lgbm` v1, best iteration 270. Ceiling 81.6%:
 
     | Slice | n | MRR@5 L1 → L2 (lift, CI) | success@1 L1 → L2 (lift) |
@@ -125,7 +126,7 @@ a `DeltaTableSource` keyed on `completion` would add ~20 lookups inside the 25 m
     | intent category+brand | 12,572 | 0.488 → 0.599 (+0.111) | +0.121 |
 
     Brand lift shows (category+brand is the biggest slice lift), so brand option (b) isn't needed. No-intent sessions
-    regress slightly: L2 reads intent into random clicks. Go/no-go: the user's call
+    regress slightly: L2 reads intent into random clicks. Go/no-go: the user shipped it with no gate
 - [x] Endpoint `rts-qac-l2` (CPU Medium, route-optimized): online lookups work; p95 at the L2 timeout (now 36 ms) at 20
   candidates. Was written against 25 ms. App bench on Medium with a live session (app plan, 2026-11-04): p50 ~29 / p95
   ~35-37 ms at 20 candidates, a fixed ~23.5 ms per-call floor, so ~1 in 20 keystrokes falls back to L1 by design
@@ -156,7 +157,7 @@ Design agreed 2026-11-03 (plan: ~/.claude/plans/streamed-fluttering-turing.md):
 - Trains on Serverless GPU (one A10, AI env v6), no DDP: the data is ~300 MB
 
 - [x] Contract `SERP_L2_CANDIDATE_COLUMNS` / `SERP_L2_REQUEST_COLUMNS` / `serp_l2_records`; `models.serp_l2` training
-  settings (commit `fbd53bf`, to land on `real-time-search`)
+  settings (commit `98ba5aa`, on `real-time-search`)
 - [x] Local logic (`rts_ml.serp_l2` pandas only; `rts_ml.serp_l2_dcn` torch; `SerpRanker` pyfunc): 127 default tests +
   4 torch tests. **Torch tests run as a second pytest process (`ml/tests_torch`)**: torch and LightGBM in one process
   segfault on macOS (two OpenMP runtimes; `OMP_NUM_THREADS=1` doesn't help)
