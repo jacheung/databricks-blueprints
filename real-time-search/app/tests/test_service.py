@@ -224,6 +224,14 @@ def test_time_calls_runs_n_times_after_warmup_and_returns_ms():
     assert len(calls) == 7 and len(times) == 5 and all(t >= 0 for t in times)
 
 
+def test_time_calls_idles_before_each_call_without_timing_the_gap():
+    # Typing pace: the connection sits idle between keystrokes; only the call itself is timed.
+    started = time.perf_counter()
+    times = time_calls(lambda: None, n=4, warmup=0, gap_ms=20)
+    assert (time.perf_counter() - started) * 1000 >= 4 * 20
+    assert all(t < 5 for t in times)
+
+
 T0 = datetime(2026, 11, 3, 12, 0, 0, tzinfo=timezone.utc)
 
 

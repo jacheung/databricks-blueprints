@@ -154,7 +154,7 @@ models:
     endpoint: rts-qac-l2
     route_optimized: true            # lower per-request overhead; callers need an endpoint-scoped OAuth token
     workload_type: CPU
-    workload_size: Small
+    workload_size: Medium            # Small (~4 concurrent) queued at a 20 ms debounce (2026-11-04)
     scale_to_zero_enabled: false
   query_embedding:                 # SERP query vectors on a dedicated GPU (pay-per-token has a wide tail)
     hf_name: Alibaba-NLP/gte-large-en-v1.5   # same model as ai_search.embedding_endpoint, so the index needs no rebuild
@@ -177,7 +177,7 @@ app:
   name: real-time-search
   l2_enabled: {qac: true, serp: true}
   timeouts_ms: {qac_l2: 36, serp_l2: 200}   # L2 slower than this falls back to the L1 order. qac_l2 = 40 ms budget - L1 p95 (3.7 ms, app bench); serving has a ~25 ms floor (2026-11-03)
-  qac_debounce_ms: 80
+  qac_debounce_ms: 20
   demo_scenarios: 6                 # half logged-in users, half guests; one intent category each
 
 budgets_ms: {qac_total_p95: 40, serp_total_p95: 400}

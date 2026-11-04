@@ -231,12 +231,15 @@ def bench_qac_l1(n: int = Query(100, ge=1, le=500)):
 
 
 @app.get("/api/bench/qac_l2")
-def bench_qac_l2(n: int = Query(100, ge=1, le=500), session_id: str | None = None, user_id: str | None = None):
-    """QAC L2 call latency from inside the app, back-to-back, no timeout: 1 vs `candidates` real L1 rows for "ca"."""
+def bench_qac_l2(n: int = Query(100, ge=1, le=500), session_id: str | None = None, user_id: str | None = None,
+                 gap_ms: float = Query(0, ge=0, le=2000)):
+    """QAC L2 call latency from inside the app, no timeout: 1 vs `candidates` real L1 rows for "ca". Back-to-back by
+    default; `gap_ms` idles before each call, like typing pace."""
     rows = prefix_rows("ca")
     sizes = sorted({1, min(QAC_L2["candidates"], len(rows))})
-    return {f"candidates_{k}": latency_stats(time_calls(lambda: qac_l2_scores(rows[:k], session_id, user_id), n))
-            for k in sizes} | {"session_id": session_id, "user_id": user_id}
+    return {f"candidates_{k}": latency_stats(time_calls(lambda: qac_l2_scores(rows[:k], session_id, user_id), n,
+                                                         gap_ms=gap_ms))
+            for k in sizes} | {"session_id": session_id, "user_id": user_id, "gap_ms": gap_ms}
 
 
 @app.get("/api/scenarios")

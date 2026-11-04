@@ -57,12 +57,14 @@ def with_timeout(executor: Executor, fn: Callable[[], object], timeout_s: float)
         raise TimeoutError from None
 
 
-def time_calls(fn: Callable[[], object], n: int, warmup: int = 3) -> list[float]:
-    """Wall time in ms of `n` back-to-back `fn()` calls, after `warmup` untimed ones."""
+def time_calls(fn: Callable[[], object], n: int, warmup: int = 3, gap_ms: float = 0) -> list[float]:
+    """Wall time in ms of `n` `fn()` calls, after `warmup` untimed ones: back-to-back, or idle for `gap_ms` (untimed)
+    before each, like keystrokes at typing pace."""
     for _ in range(warmup):
         fn()
     times = []
     for _ in range(n):
+        time.sleep(gap_ms / 1000)
         t = time.perf_counter()
         fn()
         times.append((time.perf_counter() - t) * 1000)

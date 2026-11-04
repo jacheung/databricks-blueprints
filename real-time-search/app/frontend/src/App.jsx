@@ -200,9 +200,36 @@ function KeystrokeBar({ result, status, l2Full, scale, budget }) {
   );
 }
 
+// What the user waits for: from the keystroke event until its completions are painted. Browser clocks only; the server
+// part is the response's own timings, so "network + app" is the rest of the round trip (proxy, TLS, FastAPI, JSON).
+function ScreenBar({ e2e }) {
+  const parts = e2e && [
+    { key: "e2e-debounce", label: "Debounce", source: "browser waits for a pause", ms: e2e.debounce },
+    { key: "e2e-network", label: "Network + app", source: "round trip minus server time", ms: e2e.network },
+    { key: "l1", label: "Server (L1 + L2)", source: "timings_ms, as in the bar above", ms: e2e.server },
+    { key: "e2e-render", label: "Render", source: "response → painted frame", ms: e2e.render },
+  ];
+  const rows = (parts ?? [
+    { key: "e2e-debounce", label: "Debounce", source: "browser waits for a pause" },
+    { key: "e2e-network", label: "Network + app", source: "round trip minus server time" },
+    { key: "l1", label: "Server (L1 + L2)", source: "timings_ms, as in the bar above" },
+    { key: "e2e-render", label: "Render", source: "response → painted frame" },
+  ]).map((g) => ({ key: g.key, name: g.label, source: g.source, ms: parts ? `${round1(g.ms)} ms` : EMPTY }));
+  return (
+    <Breakdown
+      title="Keystroke → on screen"
+      segments={parts ?? []}
+      rows={rows}
+      total={e2e ? `${round1(e2e.total)} ms` : EMPTY}
+      scale={e2e ? Math.max(e2e.total, 1) : 1}
+      footer={e2e ? "Measured in this browser, last keystroke only; no end-to-end target set yet." : "Type in the search bar to time what you see."}
+    />
+  );
+}
+
 // The side panel: how fast the replayed clicks reached the features and how fast a keystroke is answered, then what
 // was replayed. The keystroke bar has a fixed axis so the budget line never moves; the clickstream bar fits its total.
-function UnderTheHood({ session, result: qacResult, status, budget, freshness }) {
+function UnderTheHood({ session, result: qacResult, status, budget, freshness, e2e }) {
   const result = qacResult?.prefix?.trim() ? qacResult : null; // the empty box is not a keystroke to time
   const l2Full = useL2FullTime(result?.request_id, status);
   const freshScale = freshness?.status === "ready" ? Math.max(freshness.total_ms, 1) : 1;
@@ -211,6 +238,7 @@ function UnderTheHood({ session, result: qacResult, status, budget, freshness })
       <h2>Under the hood</h2>
       <ClickstreamBar session={session} freshness={freshness} scale={freshScale} />
       <KeystrokeBar result={result} status={status} l2Full={l2Full} scale={KEYSTROKE_SCALE_MS} budget={budget} />
+      <ScreenBar e2e={result ? e2e : null} />
       {session && <Clickstream session={session} />}
     </section>
   );
@@ -395,7 +423,9 @@ export default function App() {
   const [error, setError] = useState(null);
   const [q, setQ] = useState("");
   const [result, setResult] = useState(null);
+  const [e2e, setE2e] = useState(null);
   const latest = useRef(0);
+  const keyAt = useRef(null); // event timestamp of the last keystroke (or "Try" click), on performance.now()'s clock
 
   useEffect(() => {
     fetch("/api/config").then((r) => r.json()).then(setCfg);
@@ -410,13 +440,19 @@ export default function App() {
 
   useEffect(() => {
     const seq = ++latest.current;
+    const pressed = keyAt.current; // null when a new session, not a keystroke, refetched: nothing to time
+    keyAt.current = null;
     const t = setTimeout(() => {
+      const sent = performance.now();
       const params = new URLSearchParams({ q });
       if (session) params.set("session_id", session.session_id);
       if (session?.user_id) params.set("user_id", session.user_id);
       fetch(`/api/qac?${params}`)
         .then((r) => r.json())
-        .then((res) => seq === latest.current && setResult(res)); // drop responses to older keystrokes
+        .then((res) => {
+          if (seq !== latest.current) return; // drop responses to older keystrokes
+          setResult({ ...res, clock: pressed === null ? null : { pressed, sent, received: performance.now() } });
+        });
     }, cfg.qac_debounce_ms);
     return () => clearTimeout(t);
   }, [q, session, cfg.qac_debounce_ms]);
@@ -435,6 +471,22 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    const c = result?.clock;
+    if (!c) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        const painted = performance.now();
+        const t = result.timings_ms;
+        const server = t.l1 + (t.l2 ?? 0);
+        const debounce = c.sent - c.pressed;
+        setE2e({ debounce, network: Math.max(0, c.received - c.sent - server), server,
+                 render: painted - c.received, total: painted - c.pressed });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [result]);
+
   const freshness = useFreshness(session);
   const userFeatures = useUserFeatures(session?.user_id);
   const l1 = result?.l1 ?? [];
@@ -446,7 +498,7 @@ export default function App() {
       {/* A side column, so the panel never moves the search bar */}
       <aside>
         <UnderTheHood session={session} result={result} status={l2.status} budget={cfg.qac_budget_ms ?? 40}
-          freshness={freshness} />
+          freshness={freshness} e2e={e2e} />
       </aside>
       <main>
         <h1>Real-time search</h1>
@@ -469,7 +521,7 @@ export default function App() {
             <p className="session">
               Replayed {session.events} events to Kafka as <code>{session.session_id}</code>
               {session.user_id ? ` (user ${session.user_id})` : " (guest)"}. Try{" "}
-              <button className="link" onClick={() => setQ(session.next_query)}>
+              <button className="link" onClick={(e) => { keyAt.current = e.timeStamp; setQ(session.next_query); }}>
                 “{session.next_query}”
               </button>
             </p>
@@ -482,7 +534,7 @@ export default function App() {
           autoFocus
           placeholder="Start typing…"
           value={q}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => { keyAt.current = e.timeStamp; setQ(e.target.value); }}
         />
 
         <div className="columns">
