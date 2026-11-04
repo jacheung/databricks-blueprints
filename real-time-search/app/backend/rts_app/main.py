@@ -28,8 +28,8 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from rts_app.service import (latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search,
-                             expected_session_features, freshness_breakdown, landed, time_calls, with_timeout,
-                             RecentValues, SESSION_TABLES)
+                             expected_session_features, freshness_breakdown, l2_inputs, landed, time_calls,
+                             user_feature_values, with_timeout, RecentValues, SESSION_TABLES)
 from rts_shared.config import full_name, load_config
 from rts_shared.kafka import producer as kafka_producer
 from rts_shared.lakebase import branch, features_database
@@ -46,6 +46,7 @@ QAC_L2_TIMEOUT_S = APP["timeouts_ms"]["qac_l2"] / 1000
 L2_POOL = ThreadPoolExecutor(max_workers=8)  # timed-out calls finish here without holding the request
 SCHEMA = CFG["unity_catalog"]["schema"]
 QAC_N = 10
+L2_INPUTS = l2_inputs(CFG)
 w = WorkspaceClient()
 
 _endpoint = next(e for e in w.postgres.list_endpoints(parent=branch(CFG))
@@ -123,27 +124,34 @@ def query_index(**kw) -> list[dict]:
     return rows_to_dicts([c.name for c in r.manifest.columns], r.result.data_array)
 
 
-_session_tables = {}
+_session_tables, _user_tables = {}, {}
 
 
-def session_tables() -> dict[str, str]:
-    """The session Feature Views' online tables by kind. Feature Views names them with a generated suffix that changes
-    if the features are re-materialized, so each is looked up by a feature only it holds rather than set in config."""
-    if not _session_tables:
+def _online_tables(prefix: str, columns: dict[str, str], cache: dict) -> dict[str, str]:
+    """Feature View online tables by kind. Feature Views names them with a generated suffix that changes if the
+    features are re-materialized, so each is looked up by a feature only it holds rather than set in config."""
+    if not cache:
         # pg_catalog, not information_schema: the latter hides tables this role has no privilege on.
         with features_pool.connection() as conn:
             found = conn.execute(
                 "SELECT n.nspname, c.relname, a.attname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
                 "JOIN pg_attribute a ON a.attrelid = c.oid "
-                "WHERE n.nspname = %s AND c.relkind IN ('r', 'p') AND c.relname LIKE 'rts_session_online%%' "
-                "AND a.attname = ANY(%s)", (SCHEMA, list(SESSION_TABLES.values()))).fetchall()
-        for kind, column in SESSION_TABLES.items():
+                "WHERE n.nspname = %s AND c.relkind IN ('r', 'p') AND c.relname LIKE %s "
+                "AND a.attname = ANY(%s)", (SCHEMA, f"{prefix}%", list(columns.values()))).fetchall()
+        for kind, column in columns.items():
             names = [f'"{r["nspname"]}"."{r["relname"]}"' for r in found if r["attname"] == column]
             if len(names) != 1:
-                raise HTTPException(503, f"expected one session online table with {column} in {FEATURES_DB}, "
-                                         f"found {names}")
-            _session_tables[kind] = names[0]
-    return _session_tables
+                raise HTTPException(503, f"expected one {prefix} table with {column} in {FEATURES_DB}, found {names}")
+            cache[kind] = names[0]
+    return cache
+
+
+def session_tables() -> dict[str, str]:
+    return _online_tables("rts_session_online", SESSION_TABLES, _session_tables)
+
+
+def user_tables() -> dict[str, str]:
+    return _online_tables("rts_user_online", {f: f for f in L2_INPUTS["batch"]}, _user_tables)
 
 
 def scenarios() -> dict[str, dict]:
@@ -167,7 +175,8 @@ app = FastAPI(title="real-time-search")
 
 @app.get("/api/config")
 def config():
-    return {"qac_debounce_ms": APP["qac_debounce_ms"], "qac_n": QAC_N, "qac_budget_ms": CFG["budgets_ms"]["qac_total_p95"]}
+    return {"qac_debounce_ms": APP["qac_debounce_ms"], "qac_n": QAC_N, "qac_budget_ms": CFG["budgets_ms"]["qac_total_p95"],
+            "l2_inputs": L2_INPUTS}
 
 
 def _warm():
@@ -276,6 +285,16 @@ def freshness(session_id: str):
     if len(seen) < len(tables):
         return {"status": "timeout", "landed": sorted(seen), "waited_s": FRESHNESS_GIVE_UP_S}
     return {"status": "ready"} | freshness_breakdown(seen, played["last_event_time"], played["kafka_ack_ms"])
+
+
+@app.get("/api/users/{user_id}/features")
+def user_features(user_id: str):
+    """The user's batch (hourly) feature values as the online store holds them, read the way the L2 endpoint looks
+    them up; for display, so read once per Play rather than per keystroke."""
+    with features_pool.connection() as conn:
+        rows = [[_utc(r) for r in conn.execute(f"SELECT * FROM {name} WHERE user_id = %s", (user_id,))]
+                for name in user_tables().values()]
+    return {"user_id": user_id, "features": user_feature_values(rows)}
 
 
 _dist = ROOT / "app" / "frontend" / "dist"

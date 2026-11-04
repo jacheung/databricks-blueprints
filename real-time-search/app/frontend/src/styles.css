@@ -41,8 +41,9 @@ button.link { padding: 0; border: 0; background: none; color: var(--lava-700); f
 .error { color: var(--maroon-700); flex-basis: 100%; }
 .search { width: 100%; box-sizing: border-box; padding: 0.7rem 0.9rem; font-size: 1.1rem; }
 .subtitle, .meta { color: var(--gray-text); }
-.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
-.column { background: var(--white); border: 1px solid var(--gray-lines); border-radius: 8px; padding: 0.9rem 1rem; }
+.columns { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; column-gap: 1rem; margin-top: 1rem; }
+.column { background: var(--white); border: 1px solid var(--gray-lines); border-radius: 8px; padding: 0.9rem 1rem;
+  display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 0; align-content: start; }
 .note { color: var(--yellow-800); }
 ol { padding-left: 1.4rem; margin: 0.5rem 0 0; }
 li { margin: 0.35rem 0; }
@@ -87,14 +88,6 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
 .marker span { position: absolute; top: -1.15rem; left: -2rem; width: 4rem; text-align: center; font-size: 0.68rem; color: var(--gray-text); }
 .legend { font-size: 0.78rem; color: var(--gray-text); margin: 0.3rem 0 0; }
 .key { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 2px; vertical-align: -0.05rem; }
-.streaming summary { display: flex; align-items: baseline; gap: 0.6rem; cursor: pointer; }
-.streaming summary h2 { display: inline; }
-.streaming { background: var(--white); border: 1px solid var(--gray-lines); border-radius: 8px; padding: 0.9rem 1rem; margin-top: 1rem; }
-.features { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-.features th { text-align: left; color: var(--gray-text); font-weight: 600; border-bottom: 1px solid var(--gray-lines); padding: 0.3rem 0.4rem; }
-.features td { border-bottom: 1px solid var(--oat-medium); padding: 0.35rem 0.4rem; vertical-align: top; }
-.features td:not(:first-child), .features th:not(:first-child) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.features .meta { display: block; }
 .hood h2 { margin-bottom: 0.5rem; }
 .hood h3 { display: flex; justify-content: space-between; font-size: 0.85rem; margin: 0.9rem 0 0.3rem; }
 .hood-bar { border-bottom: 1px solid var(--oat-medium); padding-bottom: 0.6rem; margin-bottom: 0.4rem; }
@@ -106,3 +99,20 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
 .breakdown .ms { font-weight: 600; font-variant-numeric: tabular-nums; }
 .hood-bar .legend { min-height: 3.8em; }  /* footers are 1-3 lines; reserve them so filling in doesn't shift */
 .overflow { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; line-height: 1; color: var(--white); }
+/* L2 inputs by source, inline in the Session-aware subtitle; hover or focus a segment for its first values. */
+.fbar { position: relative; display: inline-flex; width: 9rem; height: 8px; gap: 2px; vertical-align: 0.05rem; }
+.fseg { height: 100%; border-radius: 2px; cursor: default; outline-offset: 2px; }
+.fseg.stream { background: var(--green-600); }
+.fseg.batch { background: var(--blue-600); }
+.fseg.request { background: var(--navy-600); }
+.fseg.off { background: repeating-linear-gradient(135deg, var(--navy-300) 0 2px, var(--oat-medium) 2px 4px); }
+.ftip { display: none; position: absolute; top: 14px; left: 0; z-index: 10; width: 19rem; padding: 0.5rem 0.6rem;
+  background: var(--white); border: 1px solid var(--gray-lines); border-radius: 6px;
+  box-shadow: 0 4px 12px rgb(27 49 57 / 12%); color: var(--navy-800); font-size: 0.78rem; }
+.fseg:hover .ftip, .fseg:focus .ftip { display: block; }
+.ftip strong, .fpath, .frow, .fmore, .fnote { display: block; }
+.fpath, .fat, .fmore, .fnote { color: var(--gray-text); }
+.fpath { margin-bottom: 0.3rem; font-size: 0.72rem; }
+.frow { display: grid; grid-template-columns: 1fr auto 5.5rem; gap: 0.5rem; padding: 0.1rem 0; font-variant-numeric: tabular-nums; }
+.frow code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frow span { text-align: right; }

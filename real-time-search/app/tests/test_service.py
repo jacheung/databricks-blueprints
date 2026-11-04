@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from rts_app.service import (index_query, latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search,
-                             expected_session_features, freshness_breakdown, landed, time_calls, with_timeout,
-                             RecentValues)
+                             expected_session_features, freshness_breakdown, l2_inputs, landed, time_calls,
+                             user_feature_values, with_timeout, RecentValues)
 from rts_shared.events import EVENT_FIELDS
 
 TABLE = {
@@ -340,3 +340,24 @@ def test_recent_values_keeps_the_newest_and_forgets_the_oldest():
     times.record("c", 60.0)
     assert times.get("a") is None and times.get("b") == 52.5 and times.get("c") == 60.0
 
+
+
+CFG = {"feature_store": {"session_window_minutes": 30, "user_window_days": 30, "item_window_days": 7}}
+
+
+def test_l2_inputs_group_what_the_qac_endpoint_receives_by_source():
+    groups = l2_inputs(CFG)
+    assert [len(groups[k]) for k in ("stream", "batch", "request")] == [12, 4, 13]
+    assert all(f.startswith("sess_") for f in groups["stream"]) and all(f.startswith("user_") for f in groups["batch"])
+    assert "l1_rank" in groups["request"] and "is_guest" in groups["request"]
+    assert not any(f.startswith("item_") for g in groups.values() for f in g)  # QAC L2 doesn't read item features
+
+
+def test_user_feature_values_drop_keys_and_list_categories_by_count():
+    rows = [[{"user_id": "u1", "user_n_clicks_30d": 8}],
+            [{"user_id": "u1", "category": "Toys", "user_cat_cnt_30d": 1},
+             {"user_id": "u1", "category": "Pet Supplies", "user_cat_cnt_30d": 5}],
+            []]  # a user with no carts has no row
+    assert user_feature_values(rows) == [{"feature": "user_n_clicks_30d", "value": 8},
+                                         {"feature": "user_cat_cnt_30d[Pet Supplies]", "value": 5},
+                                         {"feature": "user_cat_cnt_30d[Toys]", "value": 1}]

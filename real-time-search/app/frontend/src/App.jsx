@@ -236,77 +236,12 @@ function useFreshness(session) {
   return f;
 }
 
-const FEATURES = {
-  sess_n_searches_30m: ["Searches, last 30 min", "Rolling window · this session"],
-  sess_n_clicks_30m: ["Clicks, last 30 min", "Rolling window · this session"],
-  sess_n_carts_30m: ["Add-to-carts, last 30 min", "Rolling window · this session"],
-  sess_avg_price_30m: ["Avg price clicked or carted, last 30 min", "Rolling window · this session"],
-  sess_min_price_30m: ["Min price clicked or carted, last 30 min", "Rolling window · this session"],
-  sess_max_price_30m: ["Max price clicked or carted, last 30 min", "Rolling window · this session"],
-  sess_std_price_30m: ["Price spread clicked or carted, last 30 min", "Rolling window · this session"],
-  sess_last_event_type: ["Last event type (click or cart)", "Latest value · clicks + carts"],
-  sess_last_brand: ["Last brand clicked or carted", "Latest value · clicks + carts"],
-  sess_last_category: ["Last category clicked or carted", "Latest value · clicks + carts"],
-  sess_last_price: ["Last price clicked or carted", "Latest value · clicks + carts"],
-};
 const PRICE = /price/;
-
-function featureLabel(feature) {
-  const cat = feature.match(/^sess_cat_cnt_30m\[(.*)\]$/);
-  if (cat) return [`${cat[1]} clicks + carts, last 30 min`, "Rolling window · this category"];
-  return FEATURES[feature] ?? [feature, ""];
-}
 
 function formatValue(feature, v) {
   if (v === null || v === undefined) return "–";
   if (PRICE.test(feature) && typeof v === "number") return `$${v.toFixed(2)}`;
   return String(v);
-}
-
-// Per-feature timings of the replayed session (the stage breakdown is in the side panel). Collapsed: it's detail.
-function SessionFeatures({ f }) {
-  if (f?.status !== "ready") return null;
-  return (
-    <details className="streaming">
-      <summary>
-        <h2>Session features</h2>
-        <span className="subtitle">Streaming Feature Views: Kafka → Real-Time Mode → Lakebase online store</span>
-      </summary>
-      <table className="features">
-        <thead>
-          <tr>
-            <th>Streaming feature</th>
-            <th>Value</th>
-            <th>In Lakebase at</th>
-            <th>Read by the app at</th>
-          </tr>
-        </thead>
-        <tbody>
-          {f.features.map((x) => {
-            const [label, kind] = featureLabel(x.feature);
-            return (
-              <tr key={x.feature}>
-                <td>
-                  {label}
-                  <span className="meta">
-                    {kind} · <code>{x.feature.replace(/\[.*\]$/, "")}</code>
-                  </span>
-                </td>
-                <td>{formatValue(x.feature, x.value)}</td>
-                <td>{x.in_lakebase_ms === null ? "earlier event" : `+${Math.round(x.in_lakebase_ms)} ms`}</td>
-                <td>{x.served_ms === null ? "earlier event" : `+${Math.round(x.served_ms)} ms`}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <p className="legend">
-        Times are from the last replayed click, which Play sends alone after the rest of the replay. "Earlier event": a
-        category that click didn't touch. Pipeline timestamps come from its clock, app ones from the app's, so a few ms
-        of clock skew is possible. The app checks Lakebase every 10 ms.
-      </p>
-    </details>
-  );
 }
 
 function Clickstream({ session }) {
@@ -342,17 +277,95 @@ function Clickstream({ session }) {
   );
 }
 
+// What the L2 endpoint receives, by source; widths are feature counts. Hover a source for its first values.
+const SOURCES = [
+  ["stream", "Streaming", "Kafka → Real-Time Mode → Lakebase"],
+  ["batch", "Batch", "Delta → hourly → Lakebase"],
+  ["request", "Request", "the L1 row the app sends"],
+];
+const TIP_ROWS = 3;
+
+function shortValue(feature, v) {
+  return typeof v === "number" && !Number.isInteger(v) && !PRICE.test(feature) ? v.toFixed(2) : formatValue(feature, v);
+}
+
+// Rows per source: [feature, value, when the app read it]. Session and user values are the app's own Lakebase reads
+// of the tables the endpoint looks up; request values are exactly what was sent for the top completion.
+function inputRows(inputs, { freshness, userFeatures, top, session }) {
+  const ready = freshness?.status === "ready";
+  return {
+    stream: ready
+      ? freshness.features.map((x) => [x.feature, x.value, x.served_ms === null ? "earlier event" : `+${Math.round(x.served_ms)} ms`])
+      : inputs.stream.map((f) => [f, null, session ? "waiting" : "no session"]),
+    batch: (userFeatures ?? inputs.batch.map((f) => ({ feature: f, value: null }))).map((x) => [x.feature, x.value, "hourly batch"]),
+    request: inputs.request.map((f) => [
+      f,
+      !top ? null : f === "l1_rank" ? top.rank : f === "is_guest" ? Number(!session?.user_id) : top[f],
+      "in request",
+    ]),
+  };
+}
+
+function FeatureBar({ inputs, freshness, userFeatures, top, session }) {
+  if (!inputs) return null;
+  const rows = inputRows(inputs, { freshness, userFeatures, top, session });
+  const guest = session && !session.user_id;
+  return (
+    <span className="fbar">
+      {SOURCES.map(([key, label, path]) => {
+        const off = key === "batch" && guest;
+        return (
+          <span key={key} className={`fseg ${key}${off ? " off" : ""}`} style={{ flexGrow: inputs[key].length }} tabIndex={0}>
+            <span className="ftip">
+              <strong>{label} · {inputs[key].length} features</strong>
+              <span className="fpath">{key === "request" && top ? `“${top.completion}”: ${path}` : path}</span>
+              {off ? (
+                <span className="fnote">Guest: no user history, so these are empty</span>
+              ) : (
+                <>
+                  {rows[key].slice(0, TIP_ROWS).map(([f, v, at]) => (
+                    <span key={f} className="frow">
+                      <code>{f}</code>
+                      <span>{shortValue(f, v)}</span>
+                      <span className="fat">{at}</span>
+                    </span>
+                  ))}
+                  {rows[key].length > TIP_ROWS && <span className="fmore">… {rows[key].length - TIP_ROWS} more</span>}
+                </>
+              )}
+            </span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+// A logged-in session's batch features, read once per Play (they only change hourly).
+function useUserFeatures(userId) {
+  const [features, setFeatures] = useState(null);
+  useEffect(() => {
+    setFeatures(null);
+    if (!userId) return;
+    fetch(`/api/users/${userId}/features`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res) => res && setFeatures(res.features));
+  }, [userId]);
+  return features;
+}
+
 function Column({ title, subtitle, items, note, shown, intent }) {
   const changes = items.map((c, i) => (shown === undefined ? null : rankChange(c, i + 1, shown)));
   const diffed = changes.some((ch) => ch);
   return (
     <section className="column">
+      {/* One header row shared by both columns (subgrid), so their lists start level */}
       <header>
         <h2>{title}</h2>
         <p className="subtitle">{subtitle}</p>
+        {note && <p className="note">{note}</p>}
+        {diffed && <p className="summary">{diffSummary(changes)}</p>}
       </header>
-      {note && <p className="note">{note}</p>}
-      {diffed && <p className="summary">{diffSummary(changes)}</p>}
       <ol>
         {items.map((c, i) => (
           <li key={c.completion} className={changes[i] ? `change-${changes[i].kind}` : undefined}>
@@ -423,8 +436,10 @@ export default function App() {
   }
 
   const freshness = useFreshness(session);
+  const userFeatures = useUserFeatures(session?.user_id);
   const l1 = result?.l1 ?? [];
   const l2 = result?.l2 ?? { status: "not_deployed" };
+  const l2Items = l2.items ?? l1;
 
   return (
     <div className="page">
@@ -474,14 +489,19 @@ export default function App() {
           <Column title="Static" subtitle="L1: popularity from the prefix table" items={l1} intent={session?.intent} />
           <Column
             title="Session-aware"
-            subtitle="L1 + L2: reranked with clickstream features"
-            items={l2.items ?? l1}
+            subtitle={
+              <>
+                L1 + L2: with features from{" "}
+                <FeatureBar inputs={cfg.l2_inputs} freshness={freshness} userFeatures={userFeatures}
+                  top={l2Items[0]} session={session} />
+              </>
+            }
+            items={l2Items}
             note={L2_STATUS[l2.status] ?? l2.status}
             shown={l2.items ? l1.length : undefined}
             intent={session?.intent}
           />
         </div>
-        <SessionFeatures f={freshness} />
       </main>
       <div />
     </div>

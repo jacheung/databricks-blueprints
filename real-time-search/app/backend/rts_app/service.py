@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from rts_shared.events import event_payload
-from rts_shared.retrieval import filter_completions, lookup_prefix
+from rts_shared.features import feature_keys
+from rts_shared.retrieval import QAC_L2_REQUEST_COLUMNS, filter_completions, lookup_prefix
 from rts_shared.scenarios import replay
 
 
@@ -147,6 +148,26 @@ def scenario_timeline(events: list[dict]) -> list[dict]:
 
 ENGAGED = ("click", "add_to_cart")
 # The session Feature Views' online tables, each named by a feature only it holds (data/src/rts_data/feature_specs.py).
+def l2_inputs(cfg: dict) -> dict[str, list[str]]:
+    """What the QAC L2 endpoint receives, by source: session features from the Kafka stream, user features from the
+    hourly Delta batch, and the candidate fields the app sends. Item features aren't QAC L2 inputs."""
+    keys = feature_keys(cfg)
+    return {"stream": [f for f, k in keys.items() if k[0] == "session_id"],
+            "batch": [f for f, k in keys.items() if k[0] == "user_id"],
+            "request": list(QAC_L2_REQUEST_COLUMNS)}
+
+
+def user_feature_values(table_rows: list[list[dict]]) -> list[dict]:
+    """A user's online feature values from each user table's rows, lookup keys dropped; the per-category count is
+    one value per category, largest first."""
+    out = []
+    for rows in table_rows:
+        for r in sorted(rows, key=lambda r: -(r.get("user_cat_cnt_30d") or 0)):
+            out += [{"feature": f"{k}[{r['category']}]" if "category" in r else k, "value": v}
+                    for k, v in r.items() if k not in ("user_id", "category")]
+    return out
+
+
 SESSION_TABLES = {"window": "sess_n_clicks_30m", "category": "sess_cat_cnt_30m", "last": "sess_last_event_type"}
 WINDOW_FEATURES = ("sess_n_searches_30m", "sess_n_clicks_30m", "sess_n_carts_30m", "sess_avg_price_30m",
                    "sess_min_price_30m", "sess_max_price_30m", "sess_std_price_30m")
