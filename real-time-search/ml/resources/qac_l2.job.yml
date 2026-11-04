@@ -1,0 +1,26 @@
+# QAC L2: training set from Feature Views, LightGBM LambdaRank, L1 vs L2 eval, registered pyfunc; then the endpoint.
+# Redeploy only the endpoint with `--only qac_l2_endpoint`.
+resources:
+  jobs:
+    qac_l2_job:
+      name: rts-qac-l2
+      parameters:
+        - name: config_path
+          default: ${workspace.file_path}/shared/configs/${bundle.target}.yml
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "4"
+      tasks:
+        - task_key: qac_l2_lgbm
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/qac_l2_lgbm.py
+        - task_key: qac_l2_endpoint
+          depends_on:
+            - task_key: qac_l2_lgbm
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/l2_endpoint.py
+            base_parameters:
+              model_key: qac_l2

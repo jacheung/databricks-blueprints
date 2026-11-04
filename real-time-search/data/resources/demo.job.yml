@@ -1,0 +1,17 @@
+# Demo scenarios for the app: starts of test-split sessions, synced to Lakebase. Run after clickstream_job.
+resources:
+  jobs:
+    demo_job:
+      name: rts-demo-scenarios
+      parameters:
+        - name: config_path
+          default: ${workspace.file_path}/shared/configs/${bundle.target}.yml
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "4"
+      tasks:
+        - task_key: demo_scenarios
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/demo_scenarios.py

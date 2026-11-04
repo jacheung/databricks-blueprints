@@ -1,0 +1,39 @@
+# The app reads Lakebase (QAC prefixes, demo scenarios), embeds queries and searches the SERP index, and produces
+# scenario events to Kafka, as its service principal. After the first deploy, grant that principal SELECT on the
+# synced tables and ACCESS on the Kafka service credential (README, "Run the app").
+resources:
+  apps:
+    rts_app:
+      name: rts-search
+      description: "Real-time search demo: static vs session-aware QAC and SERP"
+      source_code_path: ${workspace.file_path}
+      config:
+        command: ["uvicorn", "rts_app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+        env:
+          - name: PYTHONPATH
+            value: shared/src:app/backend
+          - name: RTS_CONFIG
+            value: shared/configs/${bundle.target}.yml
+      resources:
+        - name: lakebase
+          description: Shared Lakebase instance (online store, QAC prefixes, demo scenarios)
+          postgres:
+            branch: projects/rts-online-store/branches/production
+            database: projects/rts-online-store/branches/production/databases/databricks-postgres
+            permission: CAN_CONNECT_AND_CREATE
+        - name: query-embedding
+          description: SERP query vectors (T4, route-optimized; the SP's OAuth token reaches its data plane)
+          serving_endpoint:
+            name: rts-query-embedding
+            permission: CAN_QUERY
+        - name: qac-l2
+          description: QAC L2 reranker (CPU, route-optimized)
+          serving_endpoint:
+            name: rts-qac-l2
+            permission: CAN_QUERY
+        - name: serp-index
+          description: SERP L1 hybrid index over products
+          uc_securable:
+            securable_full_name: main.jon_cheung.products_hybrid_idx
+            securable_type: TABLE
+            permission: SELECT

@@ -1,0 +1,19 @@
+# Delete the Feature Views (materializations first) and the Kafka Stream. confirm=no only lists them.
+resources:
+  jobs:
+    teardown_job:
+      name: rts-teardown
+      parameters:
+        - name: config_path
+          default: ${workspace.file_path}/shared/configs/${bundle.target}.yml
+        - name: confirm
+          default: "no"
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "4"
+      tasks:
+        - task_key: teardown
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/teardown.py

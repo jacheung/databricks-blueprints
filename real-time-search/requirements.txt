@@ -1,0 +1,6 @@
+# Databricks App (rts-app bundle): installed on top of the Apps runtime, which ships FastAPI and uvicorn.
+databricks-sdk>=0.81
+psycopg[binary,pool]>=3.2
+confluent-kafka>=2.4
+aws-msk-iam-sasl-signer-python>=1.0
+pyyaml>=6

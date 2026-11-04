@@ -1,0 +1,19 @@
+# One-off after the first app deploy: Lakebase SELECT for the app's service principal.
+resources:
+  jobs:
+    grants_job:
+      name: rts-app-grants
+      parameters:
+        - name: config_path
+          default: ${workspace.file_path}/shared/configs/${bundle.target}.yml
+        - name: app_name
+          default: ${resources.apps.rts_app.name}
+      environments:
+        - environment_key: serverless
+          spec:
+            client: "4"
+      tasks:
+        - task_key: app_grants
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/app_grants.py

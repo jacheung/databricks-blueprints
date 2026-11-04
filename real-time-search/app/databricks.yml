@@ -1,0 +1,28 @@
+# App bundle: FastAPI + React search UI as a Databricks App. Build the UI first (cd frontend && npm run build).
+# Deploy from this folder: databricks bundle deploy -t dev -p <profile>, then databricks bundle run rts_app -t dev -p <profile>
+bundle:
+  name: rts-app
+
+include:
+  - resources/*.yml
+
+sync:
+  paths:                             # sync root becomes real-time-search/, which is the app's source folder
+    - .
+    - ../shared
+    - ../requirements.txt
+  include:
+    - ../shared/configs/*.yml        # gitignored per-target configs, uploaded anyway
+    - frontend/dist/**               # built UI, gitignored
+  exclude:
+    - frontend/node_modules/**
+
+workspace:
+  root_path: /Workspace/Users/${workspace.current_user.userName}/real-time-search/app
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://e2-demo-field-eng.cloud.databricks.com

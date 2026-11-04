@@ -1,0 +1,8 @@
+# Test runner for all packages. Bundles don't build wheels; notebooks put each src/ on sys.path.
+# Run from this folder: uv run --no-project --with pytest --with pyyaml --with pandas --with numpy --with lightgbm \
+#   --with scikit-learn --with mlflow-skinny --with databricks-sdk python -m pytest -q
+# Torch tests run as a second process (add `--with torch`, then `... -m pytest -q ml/tests_torch`): torch and
+# LightGBM in one process segfault on macOS (two OpenMP runtimes).
+[tool.pytest.ini_options]
+pythonpath = ["shared/src", "data/src", "ml/src", "app/backend", "ml/tests"]
+testpaths = ["shared/tests", "data/tests", "ml/tests", "app/tests"]
