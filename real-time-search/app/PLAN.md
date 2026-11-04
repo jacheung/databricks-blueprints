@@ -12,10 +12,11 @@ the user. L2 moves rows vs L1 after Play. Debounce 20 ms; `rts-qac-l2` on CPU Me
 before presenting. Session pipeline **running** (a stopped one makes Play time out with "landed: none").
 
 ## Next
-1. Set an end-to-end target (keystroke → on screen p95) from the browser timings; write it next to the 40 ms server budget.
-2. User history (open item below): score a logged-in scenario's next query with and without `user_id`.
-3. UI search results column (`/api/search`, HYBRID default).
-4. Step 7: per-stage p50/p95 at typing pace and the L2 fallback rate; HYBRID vs ANN.
+1. Check keystroke → on screen against the 120 ms p95 target (decision log) at the 20 ms debounce: a few readings
+   from the bar (estimated ~113 ms). The bar shows no target line yet.
+2. UI search results column (`/api/search`, HYBRID default).
+3. Step 7: per-stage p50/p95 at typing pace and the L2 fallback rate; HYBRID vs ANN.
+Deferred (the user, 2026-11-04): the user-history check (open item below).
 
 ## Open items
 - User history in the demo: half the scenarios are logged in and the simulator reuses a user's long-term intent in 70%

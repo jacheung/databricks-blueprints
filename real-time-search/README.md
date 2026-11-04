@@ -2,7 +2,8 @@
 
 **Question:** Does a session-aware L2 reranker improve query autocomplete (QAC) and search results (SERP) relevance
 enough to justify its latency, and can Databricks serve both within real-time budgets (QAC < 40 ms, SERP < 400 ms,
-both server-side p95 measured in the app; feature freshness < 1 s)?
+both server-side p95 measured in the app; QAC keystroke → on screen p95 ≤ 120 ms in the browser; feature freshness
+< 1 s)?
 
 **Takeaway:** pending. Measured so far: session features reach the online store from Kafka in **p50 58 ms /
 p95 442 ms** (18 single-event probes), against p50 158 s when they streamed from a Delta table.
