@@ -13,6 +13,13 @@ an optional L2 reranks them with clickstream features from Feature Views, and th
 when L2 is slow. Data is Amazon ESCI plus simulated sessions with a planted intent. Build status is in
 [PLAN.md](PLAN.md); deferred scope is in [PARKING_LOT.md](PARKING_LOT.md).
 
+## Architecture
+
+![Architecture: real-time features and real-time model serving](docs/architecture.svg)
+
+Regenerate with `uv run --no-project --with fonttools --with brotli python docs/make_architecture.py` (icons in
+`docs/icons/`, DM Sans in `docs/fonts/`).
+
 ## Repo layout and team ownership
 
 The folders follow who owns what in production. Each one except `shared/` is its own Declarative Automation Bundle,
