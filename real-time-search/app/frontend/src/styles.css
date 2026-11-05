@@ -16,14 +16,17 @@
   background: var(--oat-light);
 }
 main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
-.page { display: grid; grid-template-columns: 1fr minmax(0, 960px) 1fr; }
-.page > main { width: 100%; box-sizing: border-box; margin: 2rem 0; }
-aside { justify-self: end; width: 100%; max-width: 22rem; padding: 2rem 0 0 1rem; box-sizing: border-box; }
-aside .hood { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
-@media (max-width: 1500px) {
-  .page { grid-template-columns: minmax(0, 960px); justify-content: center; }
-  aside { order: 2; max-width: none; padding: 0 1rem 2rem; }
-}
+/* Under the hood: a drawer on the left edge; the tab at its top right slides it out and back */
+.drawer { position: fixed; left: 0; top: 1rem; z-index: 30; width: min(22rem, calc(100vw - 3rem));
+  padding-left: 1rem; box-sizing: border-box; transition: transform 250ms ease-out; }
+.drawer.closed { transform: translateX(-100%); }
+.drawer .hood { max-height: calc(100vh - 2rem); overflow-y: auto; margin: 0; box-sizing: border-box;
+  box-shadow: 0 6px 20px rgb(27 49 57 / 10%); transition: visibility 0s; }
+.drawer.closed .hood { visibility: hidden; transition: visibility 0s 250ms; }  /* hidden once slid away: no tabbing into it */
+.drawer-tab { position: absolute; top: 0.7rem; right: -1.6rem; width: 1.6rem; height: 2.6rem; padding: 0;
+  color: var(--navy-800); background: var(--white); border: 1px solid var(--gray-lines); border-left: 0;
+  border-radius: 0 6px 6px 0; font-size: 1.2rem; line-height: 1; box-shadow: 4px 2px 8px rgb(27 49 57 / 8%); }
+.drawer-tab:hover:not(:disabled) { background: var(--oat-medium); }
 h1 { font-size: 1.5rem; margin-bottom: 0.2rem; }
 h1.store { display: flex; justify-content: center; align-items: center; gap: 0.7rem; font-size: 1.9rem; margin: 2.5rem 0 1.5rem; }
 h1.store img { height: 3rem; }

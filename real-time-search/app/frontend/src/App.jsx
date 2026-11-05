@@ -234,7 +234,7 @@ function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget,
   const typed = result?.prefix?.trim(); // the empty box is not a keystroke to time
   const freshScale = freshness?.status === "ready" ? Math.max(freshness.total_ms, 1) : 1;
   return (
-    <section className="hood">
+    <section className="hood" id="hood">
       <h2>Under the hood</h2>
       {/* Demo controls live here, so the storefront shows only the logo and the search bar */}
       <section className="replay">
@@ -596,6 +596,7 @@ export default function App() {
   const [serp, setSerp] = useState(null);
   const [searching, setSearching] = useState(false);
   const [serpE2e, setSerpE2e] = useState(null);
+  const [hoodOpen, setHoodOpen] = useState(() => window.innerWidth >= 1500); // open where it fits beside the store
   const latestSearch = useRef(0);
   const input = useRef(null);
   const latest = useRef(0);
@@ -750,8 +751,13 @@ export default function App() {
 
   return (
     <div className="page">
-      {/* A side column, so the panel never moves the search bar */}
-      <aside>
+      {/* A drawer over the left edge, so the panel never moves the search bar. Hiding it only slides it away: it stays
+          mounted, so its timings and replay are kept. */}
+      <aside className={hoodOpen ? "drawer" : "drawer closed"}>
+        <button className="drawer-tab" onClick={() => setHoodOpen((o) => !o)} aria-expanded={hoodOpen}
+          aria-controls="hood" title={hoodOpen ? "Hide under the hood" : "Show under the hood"}>
+          {hoodOpen ? "‹" : "›"}
+        </button>
         <UnderTheHood session={session} result={result} freshness={freshness} e2e={e2e} serpE2e={serpE2e}
           serpBudget={cfg.serp_budget_ms} scenarios={scenarios} scenarioId={scenarioId} onScenario={setScenarioId}
           onPlay={play} playing={playing} onTry={onTry} />
@@ -822,7 +828,6 @@ export default function App() {
         )}
         {serp && serp.l1.length === 0 && <p className="serp-timings">No results for “{serp.query}”</p>}
       </main>
-      <div />
     </div>
   );
 }
