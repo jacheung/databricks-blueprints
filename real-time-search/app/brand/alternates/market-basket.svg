@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="12 28 104 90"><path d="M30 60 Q64 4 98 60" fill="none" stroke="#1B3139" stroke-width="6" stroke-linecap="round"/><rect x="14" y="56" width="100" height="10" rx="3" fill="#1B5162"/><defs><clipPath id="bk"><polygon points="20,69 108,69 98,116 30,116"/></clipPath></defs><g clip-path="url(#bk)"><rect x="14.0" y="69.0" width="31.3" height="13.7" rx="2" fill="#1B3139"/>
+<rect x="48.3" y="69.0" width="31.3" height="13.7" rx="2" fill="#1B3139"/>
+<rect x="82.7" y="69.0" width="31.3" height="13.7" rx="2" fill="#1B3139"/>
+<rect x="14.0" y="85.7" width="14.2" height="13.7" rx="2" fill="#1B3139"/>
+<rect x="31.2" y="85.7" width="31.3" height="13.7" rx="2" fill="#FF3621"/>
+<rect x="65.5" y="85.7" width="31.3" height="13.7" rx="2" fill="#1B3139"/>
+<rect x="99.8" y="85.7" width="14.2" height="13.7" rx="2" fill="#1B3139"/>
+<rect x="14.0" y="102.4" width="31.3" height="13.7" rx="2" fill="#1B3139"/>
+<rect x="48.3" y="102.4" width="31.3" height="13.7" rx="2" fill="#1B3139"/>
+<rect x="82.7" y="102.4" width="31.3" height="13.7" rx="2" fill="#1B3139"/></g></svg>

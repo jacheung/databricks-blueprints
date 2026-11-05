@@ -93,13 +93,14 @@ const SCREEN_SCALE_MS = 160;
 const STAGE_KEYS = ["fs-kafka", "fs-rtm", "fs-lakebase", "fs-read"];
 
 // A bar with its total, then one row per segment: colour key, name, where the time comes from, ms.
-function Breakdown({ title, segments, rows, total, totalClass, scale, budget, markerLabel, footer }) {
+function Breakdown({ title, measures, segments, rows, total, totalClass, scale, budget, markerLabel, footer }) {
   return (
     <section className="hood-bar">
       <h3>
         {title}
         <span className={totalClass}>{total}</span>
       </h3>
+      {measures && <p className="measures">{measures}</p>}
       <Bar segments={segments} scale={scale} marker={budget} markerLabel={markerLabel} />
       <ul className="breakdown">
         {rows.map((r) => (
@@ -174,7 +175,8 @@ function ScreenBar({ e2e }) {
   ];
   return (
     <Breakdown
-      title="Keystroke → on screen"
+      title="Query Auto-Completion (QAC)"
+      measures="Keystroke → on screen"
       segments={e2e ? parts.filter((g) => g.ms !== undefined).map((g) => ({ key: g.key, label: g.name, ms: round1(g.ms) })) : []}
       rows={parts.map((g) => ({ key: g.key, name: g.name, source: g.source,
                                 ms: g.ms !== undefined ? `${round1(g.ms)} ms` : EMPTY }))}
@@ -213,7 +215,8 @@ function SerpBar({ e2e, budget }) {
   );
   return (
     <Breakdown
-      title="Search → results on screen"
+      title="Search Engine Results Page (SERP)"
+      measures="Search → results on screen"
       segments={e2e ? parts.filter((g) => g.ms !== undefined).map((g) => ({ key: g.key, label: g.name, ms: round1(g.ms) })) : []}
       rows={parts.map((g) => ({ key: g.key, name: g.name, source: g.source,
                                 ms: g.ms !== undefined ? `${round1(g.ms)} ms` : EMPTY }))}
@@ -705,7 +708,11 @@ export default function App() {
           serpBudget={cfg.serp_budget_ms} />
       </aside>
       <main>
-        <h1>Real-time search</h1>
+        <h1 className="store">
+          <img src="/logo.svg" alt="" />
+          Brick Lane Goods
+        </h1>
+        <p className="tagline">Real-time search on Databricks: session-aware autocomplete and results</p>
 
         <section className="scenario">
           <label>
