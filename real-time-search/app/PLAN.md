@@ -12,18 +12,27 @@ the user. L2 moves rows vs L1 after Play. Debounce 20 ms; `rts-qac-l2` on CPU Me
 before presenting. Session pipeline **running** (a stopped one makes Play time out with "landed: none").
 QAC moved into a dropdown under the search box (2026-11-04, checked in the browser by the user), freeing the area
 below for SERP. SERP L1 + L2 deployed below it (2026-11-04), with a Search → results on screen bar in the panel.
+Storefront home page deployed 2026-11-05: promo strip, cart badge (replayed add_to_cart count), session and persona
+rails (untimed `/api/search` calls), shop-by-category grid, under the centered logo + search. The user compared it in
+the browser with an Amazon-style header layout and kept centered (the header felt busy).
+Then (2026-11-05): "No clickstream (fresh shopper)" in the replay dropdown clears the session; the suggested next
+query (Try link, timeline row) is gone; with no session the home page shows "Trending now" chips from
+`/api/trending` (prefix table, one-letter prefixes, ≤ 3 words, by `pop_7d`; two rows max), frozen at the table's build.
+Then (2026-11-05, the user: the demo centres on the search bar): trending moved into the search dropdown as zero query
+(focused, empty box; after Play the pills are the session's past searches, newest first, from the Play response). The
+home page is now a decorative banner (`brand/hero_banner.py` → `public/hero.svg`, no buttons; "Needle in a brickstack? We'll find it." over a mound of bricks and product tiles, with a magnifier over a needle) plus Shop by category
+(SERP path). The Recommended for you and session product rows are gone (PARKING_LOT.md item 8).
 
 ## Next
 1. Check SERP in the browser: a full 200-candidate L2 call from the app (only the 1-candidate warm-up is verified,
    719 ms cold), the result columns and the Search → results bar.
 2. Step 7: per-stage p50/p95 at typing pace and the L2 fallback rate; HYBRID vs ANN.
-Deferred (the user, 2026-11-04): the user-history check (open item below).
+3. Sign in: check in the browser (sign in as each persona, re-search, Play under a persona) and open
+   `/api/checks/personas` (all `ok`).
 
 ## Open items
-- User history in the demo: half the scenarios are logged in and the simulator reuses a user's long-term intent in 70%
-  of their intent sessions, but scenarios aren't picked so user history matters, and nothing isolates its effect
-  (logged-in lift +0.068 vs guest +0.045 MRR is confounded). Check first: score a logged-in scenario's next query
-  with and without `user_id`; show user features only if the ranking changes.
+- Personas depend on the user features staying fresh: they fade as the simulated history ages (to zero around
+  2026-11-29; item features around 2026-11-06). See the stale batch features gotcha in [data/PLAN.md](../data/PLAN.md).
 - L2 cold start after idle: the first L2 calls after ~3–4 min without traffic take 70–170 ms (fall back to L1), then
   settle within seconds. The user warms it by hand before a demo; a background keep-warm call (1 candidate every
   ~10 s, also `rts-query-embedding`) is the fix if that's not enough. Not known: app connection or endpoint side.
@@ -196,3 +205,19 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
 - [ ] `07_latency_bench`: per-stage p50/p95, L1-only vs L1+L2. Started: `/api/bench/qac_l1` and `/api/bench/qac_l2`
   (from inside the app; `gap_ms` idles before each call, untimed, 1 test). Still needed: the fallback rate at typing
   pace (the app logs give it), SERP embed + search
+
+### Step 6b: Sign in (personas), decoupled from the clickstream
+- [x] Step 0, user history isolated (2026-11-05, local SDK against both L2 endpoints, no session, guest vs user): it
+  moves both rankings, through category share (median price barely matters). QAC: 30 users (5 per scenario category)
+  x 65 mixed 1-2 character prefixes; top 5 changed on 51-63 of 65; the user's category share of the top 5 rose
+  ~3-4x (Clothing 12% → 45-47%), e.g. "ca" → canon / camera, "be" → Beats, "n" → Nike / New Balance / North Face.
+  SERP: the strongest user per category x 12 broad queries x 200 hybrid hits; every top 10 changed, e.g. "bag" for
+  Clothing 0 → 9 of 10, "charger" for Electronics 1 → 8. This closes the user-history open item.
+- [x] Personas from data (`demo_personas`, data's `demo_job`): Ali Ghodsi (`u007808`, Electronics), Reynold Xin
+  (`u003564`, Camera & Photo), Matei Zaharia (`u018671`, Clothing, Shoes & Jewelry), synced to Lakebase; grants rerun
+- [x] Backend: `/api/personas`; `play` replays under `user_id` (identity from the sign-in, not the scenario); scenarios
+  no longer carry a user; `/api/checks/personas` re-runs the step 0 comparison from the app (route-optimized
+  endpoints need the app SP's OAuth token, which notebook runtime auth can't give) and asserts a 2x category-share lift
+- [x] UI: Sign in at the card's top right (3 personas + Continue as guest); the sign-in drives QAC, search, Play and the
+  L2 inputs bar's batch segment; signing in or out re-runs the current search (as a store's reload after login would)
+- [ ] Browser check and `/api/checks/personas` all `ok`

@@ -12,6 +12,7 @@ import itertools
 import itertools
 import logging
 import os
+import string
 import threading
 import time
 import uuid
@@ -29,7 +30,8 @@ from psycopg_pool import ConnectionPool
 
 from rts_app.service import (latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search,
                              expected_session_features, freshness_breakdown, l2_inputs, landed, time_calls,
-                             user_feature_values, with_timeout, RecentValues, SESSION_TABLES, persona_lift, ranked_top)
+                             user_feature_values, with_timeout, RecentValues, SESSION_TABLES, persona_lift, ranked_top,
+                             trending)
 from rts_shared.config import full_name, load_config
 from rts_shared.kafka import producer as kafka_producer
 from rts_shared.lakebase import branch, features_database
@@ -282,6 +284,18 @@ def list_personas():
     """Who the demo signs in as (data's demo_personas): a name, the simulated user and what their history holds."""
     return [{k: p[k] for k in ("persona_id", "name", "user_id", "category", "category_share", "category_events_30d",
                                "n_clicks_30d", "median_price_30d")} for p in personas()]
+
+
+TRENDING_N = 20  # more than two rows' worth; the UI shows two rows
+
+
+@app.get("/api/trending")
+def get_trending():
+    """Home-page trending searches, from the QAC prefix table: the top completions for every one-letter prefix."""
+    with pool.connection() as conn:
+        rows = conn.execute(f"SELECT completion, pop_7d, pop_30d, category FROM {_table('qac_prefix_online')} "
+                            "WHERE prefix = ANY(%s)", (list(string.ascii_lowercase),)).fetchall()
+    return trending(rows, TRENDING_N)
 
 
 # Persona check: broad prefixes and queries, where the candidates span categories so user history can reorder them.

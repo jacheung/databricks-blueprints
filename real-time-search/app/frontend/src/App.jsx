@@ -230,7 +230,7 @@ function SerpBar({ e2e, budget }) {
 // The side panel: how fast the replayed clicks reached the features and how fast a keystroke reaches the screen, then
 // what was replayed. The keystroke bar has a fixed axis; the clickstream bar fits its total.
 function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget,
-                       scenarios, scenarioId, onScenario, onPlay, playing, onTry }) {
+                       scenarios, scenarioId, onScenario, onPlay, playing }) {
   const typed = result?.prefix?.trim(); // the empty box is not a keystroke to time
   const freshScale = freshness?.status === "ready" ? Math.max(freshness.total_ms, 1) : 1;
   return (
@@ -241,6 +241,7 @@ function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget,
         <label>
           Shopper replay
           <select value={scenarioId} onChange={(e) => onScenario(e.target.value)}>
+            <option value="">No clickstream (fresh shopper)</option>
             {scenarios.map((s) => (
               <option key={s.scenario_id} value={s.scenario_id}>
                 {s.label}
@@ -254,10 +255,7 @@ function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget,
         {session && (
           <p className="session">
             Replayed {session.events} events to Kafka as <code>{session.session_id}</code>
-            {session.user_id ? ` (signed in, user ${session.user_id})` : " (guest)"}. Try{" "}
-            <button className="link" onClick={onTry}>
-              “{session.next_query}”
-            </button>
+            {session.user_id ? ` (signed in, user ${session.user_id})` : " (guest)"}.
           </p>
         )}
       </section>
@@ -308,11 +306,6 @@ function Clickstream({ session }) {
       </p>
       <h3>Clickstream history</h3>
       <ol className="events">
-        <li className="event next">
-          <span className="t">next</span>
-          <span className="kind">search</span>
-          <span>“{session.next_query}”: type its first letters in the search bar</span>
-        </li>
         {/* "back" events (returning to the results) carry no product, so they only add noise here */}
         {timeline.filter((e) => e.event_type !== "back").reverse().map((e, i) => (
           <li key={i} className={`event ${e.event_type}`}>
@@ -497,6 +490,94 @@ function Column({ title, subtitle, items, note, shown, intent, onPick, listId, a
 const categoryIcon = (category = "") =>
   `/categories/${category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "other"}.svg`;
 
+// One product card: the SERP grid and the home page's rails both use it.
+function ProductTile({ h, change, intent }) {
+  return (
+    <li data-id={h.product_id} className={["tile", change && `change-${change.kind}`].filter(Boolean).join(" ")}>
+      <span className="thumb" title={h.category}>
+        <img src={categoryIcon(h.category ?? "")} alt={h.category ?? ""}
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/categories/other.svg"; }} />
+      </span>
+      {change?.label && <span className={`badge rank ${change.kind}`} title={`L1 #${h.l1_rank}`}>{change.label}</span>}
+      <span className="ttitle" title={h.title}>{h.title}</span>
+      {h.brand && <span className="brand">{h.brand}</span>}
+      {h.price != null && <span className="price">${Number(h.price).toFixed(2)}</span>}
+      <span className="chips">
+        {intentMatches(h, intent).map((m) => (
+          <span key={m} className="badge intent">{m}</span>
+        ))}
+      </span>
+    </li>
+  );
+}
+
+// The catalog's categories (shared/configs/*.yml `catalog.categories`); a click searches for the category.
+const CATEGORIES = ["Electronics", "Computers & Accessories", "Cell Phones & Accessories", "Camera & Photo",
+  "Home & Kitchen", "Tools & Home Improvement", "Clothing, Shoes & Jewelry", "Beauty & Personal Care",
+  "Health & Household", "Sports & Outdoors", "Toys & Games", "Baby", "Pet Supplies", "Grocery & Gourmet Food",
+  "Automotive", "Office Products", "Arts, Crafts & Sewing", "Books & Media", "Video Games", "Patio, Lawn & Garden"];
+
+function CategoryGrid({ onPick }) {
+  return (
+    <section className="home-section">
+      <h2>Shop by category</h2>
+      <ul className="categories">
+        {CATEGORIES.map((c) => (
+          <li key={c}>
+            <button className="category" onClick={() => onPick(c)}>
+              <span className="thumb">
+                <img src={categoryIcon(c)} alt=""
+                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/categories/other.svg"; }} />
+              </span>
+              {c}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// Zero query: what the focused, empty search box offers. Trending searches (the QAC prefix table) for a fresh shopper;
+// the session's own past searches once a clickstream is replayed. A pill runs its search.
+function ZeroQuery({ title, pills, onPick }) {
+  return (
+    <div className="dropdown zero-query" onMouseDown={(e) => e.preventDefault()}>
+      <h2>{title}</h2>
+      <ul className="trending">
+        {pills.map((p) => (
+          <li key={p}>
+            <button className="chip" onClick={() => onPick(p)}>
+              <span className="glyph" aria-hidden>⌕</span>
+              {p}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// The replayed session's searches, most recent first, each once (case-insensitive).
+function recentSearches(session) {
+  const seen = new Set();
+  return (session?.timeline ?? []).filter((e) => e.event_type === "search" && e.query).reverse()
+    .map((e) => e.query).filter((q) => !seen.has(q.toLowerCase()) && seen.add(q.toLowerCase()));
+}
+
+function CartIcon({ count }) {
+  return (
+    <span className="cart" title={`${count} in cart (from the replayed clickstream)`}>
+      <svg viewBox="0 0 24 24" aria-hidden>
+        <path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H6.6" />
+        <circle cx="9.5" cy="19" r="1.4" />
+        <circle cx="17" cy="19" r="1.4" />
+      </svg>
+      <span className="cart-count">{count}</span>
+    </span>
+  );
+}
+
 // FLIP: after `key` changes, slide each tile (by id) from where it was to where it is now.
 function useFlip(ref, key) {
   const prev = useRef(new Map());
@@ -573,25 +654,7 @@ function ResultGrid({ serp, intent }) {
       </p>
       {!l2ok && <p className="note">{note}</p>}
       <ol className="grid" ref={grid}>
-        {items.map((h, i) => (
-          <li key={h.product_id} data-id={h.product_id}
-            className={["tile", changes[i] && `change-${changes[i].kind}`].filter(Boolean).join(" ")}>
-            <span className="thumb" title={h.category}>
-              <img src={categoryIcon(h.category ?? "")} alt={h.category ?? ""}
-                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/categories/other.svg"; }} />
-            </span>
-            {changes[i]?.label && <span className={`badge rank ${changes[i].kind}`} title={`L1 #${h.l1_rank}`}>
-              {changes[i].label}</span>}
-            <span className="ttitle" title={h.title}>{h.title}</span>
-            {h.brand && <span className="brand">{h.brand}</span>}
-            {h.price != null && <span className="price">${Number(h.price).toFixed(2)}</span>}
-            <span className="chips">
-              {intentMatches(h, intent).map((m) => (
-                <span key={m} className="badge intent">{m}</span>
-              ))}
-            </span>
-          </li>
-        ))}
+        {items.map((h, i) => <ProductTile key={h.product_id} h={h} change={changes[i]} intent={intent} />)}
       </ol>
       {pages > 1 && (
         <nav className="pager" aria-label="Result pages">
@@ -628,6 +691,7 @@ export default function App() {
   const [scenarioId, setScenarioId] = useState("");
   const [session, setSession] = useState(null);
   const [personas, setPersonas] = useState([]);
+  const [trending, setTrending] = useState([]); // zero-query pills for a fresh shopper
   const [me, setMe] = useState(null); // the signed-in persona; null is a guest
   const userId = me?.user_id ?? null;
   const [playing, setPlaying] = useState(false);
@@ -644,7 +708,7 @@ export default function App() {
   const latestSearch = useRef(0);
   const input = useRef(null);
   const latest = useRef(0);
-  const keyAt = useRef(null); // event timestamp of the last keystroke (or "Try" click), on performance.now()'s clock
+  const keyAt = useRef(null); // event timestamp of the last keystroke, on performance.now()'s clock
 
   useEffect(() => {
     fetch("/api/config").then((r) => r.json()).then(setCfg);
@@ -656,6 +720,8 @@ export default function App() {
       })
       .catch(() => setError("Could not load scenarios"));
     fetch("/api/personas").then((r) => (r.ok ? r.json() : [])).then(setPersonas);
+    fetch("/api/trending").then((r) => (r.ok ? r.json() : [])).then((t) => setTrending(t.map((x) => x.query)))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -676,6 +742,12 @@ export default function App() {
     }, cfg.qac_debounce_ms);
     return () => clearTimeout(t);
   }, [q, session, userId, cfg.qac_debounce_ms]);
+
+  // "No clickstream" (an empty id) drops the replayed session: QAC and search run as a shopper with no session history.
+  function chooseScenario(id) {
+    setScenarioId(id);
+    if (!id) setSession(null);
+  }
 
   async function play() {
     setPlaying(true);
@@ -731,7 +803,10 @@ export default function App() {
   const l1 = result?.l1 ?? [];
   const l2 = result?.l2 ?? { status: "not_deployed" };
   const l2Items = l2.items ?? l1;
-  const listed = open && l2Items.length > 0;
+  const listed = open && !!q.trim() && l2Items.length > 0; // an empty box shows the zero-query panel instead
+  const recent = recentSearches(session);
+  const zeroQuery = recent.length ? { title: "Your recent searches", pills: recent } : { title: "Trending now", pills: trending };
+  const zeroOpen = open && !q.trim() && zeroQuery.pills.length > 0;
 
   // Searches with the current session, so L2 sees the same features QAC did; a newer search drops older responses.
   function runSearch(text) {
@@ -761,6 +836,13 @@ export default function App() {
     if (serp) runSearch(serp.query);
   }, [userId]);
 
+  // Clearing the clickstream re-runs the current search too, so its L2 order no longer uses the old session.
+  const hadSession = useRef(false);
+  useEffect(() => {
+    if (hadSession.current && !session && serp) runSearch(serp.query);
+    hadSession.current = !!session;
+  }, [session]);
+
   // Picking a completion fills the box, closes the dropdown and searches (it isn't a keystroke, so it isn't timed).
   function pick(completion) {
     setQ(completion);
@@ -784,14 +866,6 @@ export default function App() {
     }
   }
 
-  // The replay's "Try" link types its next query into the box (timed like a keystroke).
-  function onTry(e) {
-    keyAt.current = e.timeStamp;
-    setQ(session.next_query);
-    setActive(-1);
-    input.current.focus(); // opens the dropdown
-  }
-
   // The logo goes "home": clear the query and results without a reload, so the replayed session stays.
   function goHome(e) {
     e.preventDefault();
@@ -806,6 +880,67 @@ export default function App() {
     setError(null);
   }
 
+  const cartCount = session?.timeline.filter((e) => e.event_type === "add_to_cart").length ?? 0;
+  const logo = (
+    <h1 className="store">
+      <a href="/" onClick={goHome}>
+        <img src="/logo.svg" alt="" />
+        Brick Lane Goods
+      </a>
+    </h1>
+  );
+  const searchBox = (
+    // Focus leaving the box and its dropdown closes it; mousedown inside the dropdown keeps focus in the box
+    <div className="searchbox" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
+      <svg className="search-icon" viewBox="0 0 24 24" aria-hidden>
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <line x1="15.5" y1="15.5" x2="21" y2="21" />
+      </svg>
+      <input
+        ref={input}
+        className="search"
+        autoFocus
+        placeholder="Search"
+        value={q}
+        role="combobox"
+        aria-expanded={listed || zeroOpen}
+        aria-controls="qac-l2"
+        aria-activedescendant={listed && active >= 0 ? `qac-l2-${active}` : undefined}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => { keyAt.current = e.timeStamp; setQ(e.target.value); setActive(-1); setOpen(true); }}
+        onKeyDown={onKeyDown}
+      />
+
+      {zeroOpen && <ZeroQuery title={zeroQuery.title} pills={zeroQuery.pills} onPick={pick} />}
+      {listed && (
+        <div className="dropdown" onMouseDown={(e) => e.preventDefault()}>
+          <div className="columns">
+            <Column title="Static" subtitle="L1: popularity from the prefix table" items={l1} intent={session?.intent}
+              onPick={pick} prefix={result?.prefix} />
+            <Column
+              title="Session-aware"
+              subtitle={
+                <>
+                  L1 + L2: with features from{" "}
+                  <FeatureBar inputs={cfg.l2_inputs} freshness={freshness} userFeatures={userFeatures}
+                    top={l2Items[0]} session={session} userId={userId} />
+                </>
+              }
+              items={l2Items}
+              note={L2_STATUS[l2.status] ?? l2.status}
+              shown={l2.items ? l1.length : undefined}
+              intent={session?.intent}
+              onPick={pick}
+              listId="qac-l2"
+              active={active}
+              prefix={result?.prefix}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className={hoodOpen ? "page hood-open" : "page"}>
       {/* A drawer on the left edge: on wide screens it pushes the storefront over, on narrow ones it overlays it.
@@ -816,67 +951,31 @@ export default function App() {
           {hoodOpen ? "‹" : "›"}
         </button>
         <UnderTheHood session={session} result={result} freshness={freshness} e2e={e2e} serpE2e={serpE2e}
-          serpBudget={cfg.serp_budget_ms} scenarios={scenarios} scenarioId={scenarioId} onScenario={setScenarioId}
-          onPlay={play} playing={playing} onTry={onTry} />
+          serpBudget={cfg.serp_budget_ms} scenarios={scenarios} scenarioId={scenarioId} onScenario={chooseScenario}
+          onPlay={play} playing={playing} />
       </aside>
       <main>
-        <SignIn personas={personas} me={me} onPick={setMe} />
-        <h1 className="store">
-          <a href="/" onClick={goHome}>
-            <img src="/logo.svg" alt="" />
-            Brick Lane Goods
-          </a>
-        </h1>
-
-        {/* Focus leaving the box and its dropdown closes it; mousedown inside the dropdown keeps focus in the box */}
-        <div className="searchbox" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
-          <svg className="search-icon" viewBox="0 0 24 24" aria-hidden>
-            <circle cx="10.5" cy="10.5" r="6.5" />
-            <line x1="15.5" y1="15.5" x2="21" y2="21" />
-          </svg>
-          <input
-            ref={input}
-            className="search"
-            autoFocus
-            placeholder="Search"
-            value={q}
-            role="combobox"
-            aria-expanded={listed}
-            aria-controls="qac-l2"
-            aria-activedescendant={listed && active >= 0 ? `qac-l2-${active}` : undefined}
-            onFocus={() => setOpen(true)}
-            onChange={(e) => { keyAt.current = e.timeStamp; setQ(e.target.value); setActive(-1); setOpen(true); }}
-            onKeyDown={onKeyDown}
-          />
-
-          {listed && (
-            <div className="dropdown" onMouseDown={(e) => e.preventDefault()}>
-              <div className="columns">
-                <Column title="Static" subtitle="L1: popularity from the prefix table" items={l1} intent={session?.intent}
-                  onPick={pick} prefix={result?.prefix} />
-                <Column
-                  title="Session-aware"
-                  subtitle={
-                    <>
-                      L1 + L2: with features from{" "}
-                      <FeatureBar inputs={cfg.l2_inputs} freshness={freshness} userFeatures={userFeatures}
-                        top={l2Items[0]} session={session} userId={userId} />
-                    </>
-                  }
-                  items={l2Items}
-                  note={L2_STATUS[l2.status] ?? l2.status}
-                  shown={l2.items ? l1.length : undefined}
-                  intent={session?.intent}
-                  onPick={pick}
-                  listId="qac-l2"
-                  active={active}
-                  prefix={result?.prefix}
-                />
-              </div>
-            </div>
-          )}
+        <p className="promo">Free shipping over $35 · Fresh picks daily</p>
+        <div className="account">
+          <SignIn personas={personas} me={me} onPick={setMe} />
+          <CartIcon count={cartCount} />
         </div>
+        {logo}
+        {searchBox}
         {error && <p className="error">{error}</p>}
+
+        {!serp && (
+          <>
+            {/* Decoration only: the demo starts in the search bar above */}
+            <section className="hero">
+              <div className="hero-copy">
+                <h2>Needle in a brickstack?<br />We'll find it.</h2>
+                <p>Everything you're after, one search away.</p>
+              </div>
+            </section>
+            <CategoryGrid onPick={pick} />
+          </>
+        )}
 
         {serp && serp.l1.length > 0 && (
           <section className={`serp${searching ? " stale" : ""}`}>
