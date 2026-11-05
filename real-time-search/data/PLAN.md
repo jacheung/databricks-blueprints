@@ -71,3 +71,9 @@ Update this file, plus this track's one status line in the top-level file, at th
   searched earlier and in the intent category; 688 of 2,849 test candidates pass (20 categories). New picks: Canon,
   Always, Kohler, Nike, Beats, REVLON. Left as is: 2 non-adjacent repeats (sc3, sc6); next queries name the brand only in
   sc4/sc5; brand shoppers click almost only their brand (`BRAND_BOOST`). Simulator realism: PARKING_LOT
+- [x] `demo_personas` (2026-11-05, `demo_job`'s second task, checks green): the app's sign-in personas
+  (`app.demo_personas`: a name and a category each), picked from the user features' latest values as the most
+  concentrated user with 15+ events in the category (`rts_shared.scenarios.pick_personas`); records
+  `features_as_of`; synced to `demo_personas_online`. Picks: Ali Ghodsi `u007808` (Electronics, 39 events), Reynold Xin
+  `u003564` (Camera & Photo, 29), Matei Zaharia `u018671` (Clothing, Shoes & Jewelry, 25), all 100% in category.
+  Scenario labels no longer say guest or logged in: the app replays them under whoever is signed in.
