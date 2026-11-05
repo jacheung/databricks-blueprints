@@ -450,14 +450,10 @@ function Column({ title, subtitle, items, note, shown, intent, onPick, listId, a
   );
 }
 
-// Placeholder thumbnail tones (no product images in ESCI): each category hashes to one brand colour.
-const THUMB_TONES = ["navy", "blue", "green", "lava", "yellow", "maroon"];
-
-function thumbTone(category = "") {
-  let h = 0;
-  for (const ch of category) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return THUMB_TONES[h % THUMB_TONES.length];
-}
+// ESCI has no product images, so each tile shows its category's icon (public/categories, in the logo's palette).
+// "Clothing, Shoes & Jewelry" -> clothing-shoes-jewelry.svg; an unknown or missing category falls back to other.svg.
+const categoryIcon = (category = "") =>
+  `/categories/${category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "other"}.svg`;
 
 // FLIP: after `key` changes, slide each tile (by id) from where it was to where it is now.
 function useFlip(ref, key) {
@@ -538,7 +534,10 @@ function ResultGrid({ serp, intent }) {
         {items.map((h, i) => (
           <li key={h.product_id} data-id={h.product_id}
             className={["tile", changes[i] && `change-${changes[i].kind}`].filter(Boolean).join(" ")}>
-            <span className={`thumb ${thumbTone(h.category)}`} title={h.category}>{h.category?.[0] ?? "?"}</span>
+            <span className="thumb" title={h.category}>
+              <img src={categoryIcon(h.category ?? "")} alt={h.category ?? ""}
+                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/categories/other.svg"; }} />
+            </span>
             {changes[i]?.label && <span className={`badge rank ${changes[i].kind}`} title={`L1 #${h.l1_rank}`}>
               {changes[i].label}</span>}
             <span className="ttitle" title={h.title}>{h.title}</span>

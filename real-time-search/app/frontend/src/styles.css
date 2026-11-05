@@ -169,13 +169,8 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
 .tile.change-up { border-color: var(--blue-600); }
 .tile.change-new { border-color: var(--green-600); }
 .thumb { display: grid; place-items: center; aspect-ratio: 1; border-radius: 6px; margin-bottom: 0.3rem;
-  font-size: 2rem; font-weight: 700; color: var(--white); }
-.thumb.navy { background: var(--navy-600); }
-.thumb.blue { background: var(--blue-600); }
-.thumb.green { background: var(--green-700); }
-.thumb.lava { background: var(--lava-700); }
-.thumb.yellow { background: var(--yellow-800); }
-.thumb.maroon { background: var(--maroon-600); }
+  background: var(--oat-medium); }
+.thumb img { width: 62%; height: 62%; }
 .badge.rank { position: absolute; top: 0.9rem; right: 0.9rem; margin: 0; }
 .ttitle { font-size: 0.85rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .brand { font-size: 0.75rem; color: var(--gray-text); }
