@@ -126,7 +126,6 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
 .event.search .kind { color: var(--blue-700); }
 .event.click .kind { color: var(--lava-700); }
 .event.add_to_cart .kind { color: var(--green-700); }
-.event.next { border-bottom: 1px dashed var(--navy-300); margin-bottom: 0.3rem; padding-bottom: 0.3rem; }
 .seg.fs-kafka, .key.fs-kafka { background: var(--blue-600); }
 .seg.fs-rtm, .key.fs-rtm { background: var(--green-600); }
 .seg.fs-lakebase, .key.fs-lakebase { background: var(--green-700); }
@@ -238,3 +237,11 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
   font-size: 0.8rem; font-weight: 600; line-height: 1.2; text-align: center; }
 .category:hover:not(:disabled) { background: var(--oat-light); border-color: var(--navy-300); }
 .category .thumb { width: 100%; margin: 0; }
+/* Two rows of chips at most: whole chips wrap, so clipping the height drops the rest without cutting one in half */
+.trending { list-style: none; padding: 0; margin: 0.8rem 0 0; display: flex; flex-wrap: wrap; gap: 0.5rem;
+  max-height: calc(2 * 2.2rem + 0.5rem); overflow: hidden; }
+.trending li { margin: 0; padding: 0; }
+.chip { display: inline-flex; align-items: center; gap: 0.4rem; height: 2.2rem; box-sizing: border-box; padding: 0 0.85rem; color: var(--navy-800);
+  background: var(--white); border: 1px solid var(--gray-lines); border-radius: 999px; font-weight: 500; }
+.chip:hover:not(:disabled) { background: var(--oat-medium); }
+.chip .glyph { color: var(--gray-text); }

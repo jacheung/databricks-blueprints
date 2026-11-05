@@ -230,7 +230,7 @@ function SerpBar({ e2e, budget }) {
 // The side panel: how fast the replayed clicks reached the features and how fast a keystroke reaches the screen, then
 // what was replayed. The keystroke bar has a fixed axis; the clickstream bar fits its total.
 function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget,
-                       scenarios, scenarioId, onScenario, onPlay, playing, onTry }) {
+                       scenarios, scenarioId, onScenario, onPlay, playing }) {
   const typed = result?.prefix?.trim(); // the empty box is not a keystroke to time
   const freshScale = freshness?.status === "ready" ? Math.max(freshness.total_ms, 1) : 1;
   return (
@@ -241,6 +241,7 @@ function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget,
         <label>
           Shopper replay
           <select value={scenarioId} onChange={(e) => onScenario(e.target.value)}>
+            <option value="">No clickstream (fresh shopper)</option>
             {scenarios.map((s) => (
               <option key={s.scenario_id} value={s.scenario_id}>
                 {s.label}
@@ -254,10 +255,7 @@ function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget,
         {session && (
           <p className="session">
             Replayed {session.events} events to Kafka as <code>{session.session_id}</code>
-            {session.user_id ? ` (signed in, user ${session.user_id})` : " (guest)"}. Try{" "}
-            <button className="link" onClick={onTry}>
-              “{session.next_query}”
-            </button>
+            {session.user_id ? ` (signed in, user ${session.user_id})` : " (guest)"}.
           </p>
         )}
       </section>
@@ -308,11 +306,6 @@ function Clickstream({ session }) {
       </p>
       <h3>Clickstream history</h3>
       <ol className="events">
-        <li className="event next">
-          <span className="t">next</span>
-          <span className="kind">search</span>
-          <span>“{session.next_query}”: type its first letters in the search bar</span>
-        </li>
         {/* "back" events (returning to the results) carry no product, so they only add noise here */}
         {timeline.filter((e) => e.event_type !== "back").reverse().map((e, i) => (
           <li key={i} className={`event ${e.event_type}`}>
@@ -577,6 +570,31 @@ function Rail({ title, subtitle, q, sessionId, userId, intent }) {
   );
 }
 
+// Home-page trending searches (the QAC prefix table's most searched completions); a chip runs its search.
+function TrendingSearches({ onPick }) {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    fetch("/api/trending").then((r) => (r.ok ? r.json() : [])).then(setItems).catch(() => {});
+  }, []);
+  if (!items.length) return null;
+  return (
+    <section className="home-section">
+      <h2>Trending now</h2>
+      <p className="subtitle">Most searched this week</p>
+      <ul className="trending">
+        {items.map((t) => (
+          <li key={t.query}>
+            <button className="chip" onClick={() => onPick(t.query)} title={t.category}>
+              <span className="glyph" aria-hidden>⌕</span>
+              {t.query}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function CartIcon({ count }) {
   return (
     <span className="cart" title={`${count} in cart (from the replayed clickstream)`}>
@@ -719,7 +737,7 @@ export default function App() {
   const latestSearch = useRef(0);
   const input = useRef(null);
   const latest = useRef(0);
-  const keyAt = useRef(null); // event timestamp of the last keystroke (or "Try" click), on performance.now()'s clock
+  const keyAt = useRef(null); // event timestamp of the last keystroke, on performance.now()'s clock
 
   useEffect(() => {
     fetch("/api/config").then((r) => r.json()).then(setCfg);
@@ -751,6 +769,12 @@ export default function App() {
     }, cfg.qac_debounce_ms);
     return () => clearTimeout(t);
   }, [q, session, userId, cfg.qac_debounce_ms]);
+
+  // "No clickstream" (an empty id) drops the replayed session: QAC and search run as a shopper with no session history.
+  function chooseScenario(id) {
+    setScenarioId(id);
+    if (!id) setSession(null);
+  }
 
   async function play() {
     setPlaying(true);
@@ -836,6 +860,13 @@ export default function App() {
     if (serp) runSearch(serp.query);
   }, [userId]);
 
+  // Clearing the clickstream re-runs the current search too, so its L2 order no longer uses the old session.
+  const hadSession = useRef(false);
+  useEffect(() => {
+    if (hadSession.current && !session && serp) runSearch(serp.query);
+    hadSession.current = !!session;
+  }, [session]);
+
   // Picking a completion fills the box, closes the dropdown and searches (it isn't a keystroke, so it isn't timed).
   function pick(completion) {
     setQ(completion);
@@ -857,14 +888,6 @@ export default function App() {
     } else if (e.key === "Escape") {
       setOpen(false);
     }
-  }
-
-  // The replay's "Try" link types its next query into the box (timed like a keystroke).
-  function onTry(e) {
-    keyAt.current = e.timeStamp;
-    setQ(session.next_query);
-    setActive(-1);
-    input.current.focus(); // opens the dropdown
   }
 
   // The logo goes "home": clear the query and results without a reload, so the replayed session stays.
@@ -951,8 +974,8 @@ export default function App() {
           {hoodOpen ? "‹" : "›"}
         </button>
         <UnderTheHood session={session} result={result} freshness={freshness} e2e={e2e} serpE2e={serpE2e}
-          serpBudget={cfg.serp_budget_ms} scenarios={scenarios} scenarioId={scenarioId} onScenario={setScenarioId}
-          onPlay={play} playing={playing} onTry={onTry} />
+          serpBudget={cfg.serp_budget_ms} scenarios={scenarios} scenarioId={scenarioId} onScenario={chooseScenario}
+          onPlay={play} playing={playing} />
       </aside>
       <main>
         <p className="promo">Free shipping over $35 · Fresh picks daily</p>
@@ -966,8 +989,10 @@ export default function App() {
 
         {!serp && (
           <>
-            <Rail title="Picking up where you left off" subtitle={session && `From your session: “${session.next_query}”`}
-              q={session?.next_query} sessionId={session?.session_id} userId={userId} intent={session?.intent} />
+            {session ? (
+              <Rail title="Picking up where you left off" subtitle={`From your session: “${session.next_query}”`}
+                q={session.next_query} sessionId={session.session_id} userId={userId} intent={session.intent} />
+            ) : <TrendingSearches onPick={pick} />}
             <Rail title="Recommended for you" subtitle={me && `Because you shop ${me.category}`} q={me?.category}
               sessionId={session?.session_id} userId={userId} intent={session?.intent} />
             <CategoryGrid onPick={pick} />

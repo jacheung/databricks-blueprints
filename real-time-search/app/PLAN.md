@@ -15,6 +15,9 @@ below for SERP. SERP L1 + L2 deployed below it (2026-11-04), with a Search → r
 Storefront home page deployed 2026-11-05: promo strip, cart badge (replayed add_to_cart count), session and persona
 rails (untimed `/api/search` calls), shop-by-category grid, under the centered logo + search. The user compared it in
 the browser with an Amazon-style header layout and kept centered (the header felt busy).
+Then (2026-11-05): "No clickstream (fresh shopper)" in the replay dropdown clears the session; the suggested next
+query (Try link, timeline row) is gone; with no session the home page shows "Trending now" chips from
+`/api/trending` (prefix table, one-letter prefixes, ≤ 3 words, by `pop_7d`; two rows max), frozen at the table's build.
 
 ## Next
 1. Check SERP in the browser: a full 200-candidate L2 call from the app (only the 1-candidate warm-up is verified,

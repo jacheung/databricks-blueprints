@@ -8,7 +8,7 @@ import pytest
 from rts_app.service import (index_query, latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search,
                              expected_session_features, freshness_breakdown, l2_inputs, landed, time_calls,
                              user_feature_values, with_timeout, RecentValues)
-from rts_app.service import persona_lift, ranked_top
+from rts_app.service import persona_lift, ranked_top, trending
 from rts_shared.events import EVENT_FIELDS
 
 TABLE = {
@@ -423,3 +423,21 @@ def test_persona_lift_compares_category_share_in_the_top_results():
     assert persona_lift(guest, guest, "Electronics", min_lift=2.0)["ok"] is False   # no lift
     none = [[other], [other]]
     assert persona_lift(none, none, "Electronics", min_lift=2.0)["ok"] is False      # 0 -> 0 is not a lift
+
+
+def test_trending_dedupes_completions_across_prefixes_keeps_short_ones_and_ranks_by_7_day_popularity():
+    rows = [  # "camera bag" is served for both "c" and "b"; one chip each
+        {"prefix": "c", "completion": "camera bag", "pop_7d": 50, "pop_30d": 200, "category": "Camera & Photo"},
+        {"prefix": "c", "completion": "cat food", "pop_7d": 80, "pop_30d": 90, "category": "Pet Supplies"},
+        {"prefix": "b", "completion": "camera bag", "pop_7d": 50, "pop_30d": 200, "category": "Camera & Photo"},
+        {"prefix": "b", "completion": "batteries", "pop_7d": 50, "pop_30d": 300, "category": "Electronics"},
+        {"prefix": "u", "completion": "usb c cable", "pop_7d": 10, "pop_30d": 400, "category": "Electronics"},
+        # over 3 words: too long for a chip, however popular
+        {"prefix": "d", "completion": "dog food for puppies", "pop_7d": 999, "pop_30d": 999, "category": "Pet Supplies"},
+    ]
+    out = trending(rows, n=3)
+    # ties on 7 days break on 30 days
+    assert out == [{"query": "cat food", "category": "Pet Supplies"},
+                   {"query": "batteries", "category": "Electronics"},
+                   {"query": "camera bag", "category": "Camera & Photo"}]
+    assert trending([], n=3) == []

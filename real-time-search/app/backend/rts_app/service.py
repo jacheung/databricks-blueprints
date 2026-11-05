@@ -300,3 +300,11 @@ def persona_lift(guest_tops: list[list[dict]], persona_tops: list[list[dict]], c
 
     guest, persona = share(guest_tops), share(persona_tops)
     return {"guest": guest, "persona": persona, "ok": persona > guest and persona >= min_lift * guest}
+
+
+def trending(rows: list[dict], n: int, max_words: int = 3) -> list[dict]:
+    """Trending searches for the home page from QAC prefix rows (one-letter prefixes cover the popular completions):
+    one per completion of at most `max_words` words (a chip), most searched in 7 days first, ties broken on 30 days."""
+    best = {r["completion"]: r for r in rows if len(r["completion"].split()) <= max_words}
+    top = sorted(best.values(), key=lambda r: (-r["pop_7d"], -r["pop_30d"]))[:n]
+    return [{"query": r["completion"], "category": r["category"]} for r in top]
