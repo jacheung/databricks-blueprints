@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const L2_STATUS = {
   not_deployed: "L2 not deployed: showing the L1 order",
@@ -93,13 +93,14 @@ const SCREEN_SCALE_MS = 160;
 const STAGE_KEYS = ["fs-kafka", "fs-rtm", "fs-lakebase", "fs-read"];
 
 // A bar with its total, then one row per segment: colour key, name, where the time comes from, ms.
-function Breakdown({ title, segments, rows, total, totalClass, scale, budget, markerLabel, footer }) {
+function Breakdown({ title, measures, segments, rows, total, totalClass, scale, budget, markerLabel, footer }) {
   return (
     <section className="hood-bar">
       <h3>
         {title}
         <span className={totalClass}>{total}</span>
       </h3>
+      {measures && <p className="measures">{measures}</p>}
       <Bar segments={segments} scale={scale} marker={budget} markerLabel={markerLabel} />
       <ul className="breakdown">
         {rows.map((r) => (
@@ -174,7 +175,8 @@ function ScreenBar({ e2e }) {
   ];
   return (
     <Breakdown
-      title="Keystroke → on screen"
+      title="Query Auto-Completion (QAC)"
+      measures="Keystroke → on screen"
       segments={e2e ? parts.filter((g) => g.ms !== undefined).map((g) => ({ key: g.key, label: g.name, ms: round1(g.ms) })) : []}
       rows={parts.map((g) => ({ key: g.key, name: g.name, source: g.source,
                                 ms: g.ms !== undefined ? `${round1(g.ms)} ms` : EMPTY }))}
@@ -213,7 +215,8 @@ function SerpBar({ e2e, budget }) {
   );
   return (
     <Breakdown
-      title="Search → results on screen"
+      title="Search Engine Results Page (SERP)"
+      measures="Search → results on screen"
       segments={e2e ? parts.filter((g) => g.ms !== undefined).map((g) => ({ key: g.key, label: g.name, ms: round1(g.ms) })) : []}
       rows={parts.map((g) => ({ key: g.key, name: g.name, source: g.source,
                                 ms: g.ms !== undefined ? `${round1(g.ms)} ms` : EMPTY }))}
@@ -378,8 +381,15 @@ function useUserFeatures(userId) {
   return features;
 }
 
+// Retail autocomplete style: the typed prefix stays plain and the rest of the completion is bold.
+function Completion({ text, prefix }) {
+  const p = prefix?.trim() ?? "";
+  if (!p || !text.toLowerCase().startsWith(p.toLowerCase())) return <strong>{text}</strong>;
+  return <>{text.slice(0, p.length)}<strong>{text.slice(p.length)}</strong></>;
+}
+
 // `listId` marks the column ↑/↓ moves through (`active` is its highlighted row); a click on any row picks it.
-function Column({ title, subtitle, items, note, shown, intent, onPick, listId, active }) {
+function Column({ title, subtitle, items, note, shown, intent, onPick, listId, active, prefix }) {
   const changes = items.map((c, i) => (shown === undefined ? null : rankChange(c, i + 1, shown)));
   const diffed = changes.some((ch) => ch);
   return (
@@ -395,18 +405,18 @@ function Column({ title, subtitle, items, note, shown, intent, onPick, listId, a
         {items.map((c, i) => (
           <li key={c.completion} id={listId && `${listId}-${i}`} role={listId && "option"}
             aria-selected={listId ? i === active : undefined} onClick={() => onPick(c.completion)}
+            title={`${c.pop_30d} searches · ${Math.round(c.ctr * 100)}% engaged`}
             className={[changes[i] && `change-${changes[i].kind}`, listId && i === active && "active"]
               .filter(Boolean).join(" ") || undefined}>
+            <span className="glyph" aria-hidden>⌕</span>
             <span className="completion">
-              {c.completion}
+              <Completion text={c.completion} prefix={prefix} />
               {changes[i]?.label && <span className={`badge ${changes[i].kind}`}>{changes[i].label}</span>}
               {intentMatches(c, intent).map((m) => (
                 <span key={m} className="badge intent">{m}</span>
               ))}
             </span>
-            <span className="meta">
-              {c.category} · {c.pop_30d} searches · {Math.round(c.ctr * 100)}% engaged
-            </span>
+            <span className="cat">{c.category}</span>
           </li>
         ))}
       </ol>
@@ -414,35 +424,120 @@ function Column({ title, subtitle, items, note, shown, intent, onPick, listId, a
   );
 }
 
-// One SERP column: products in rank order, with L2's rank badges vs the L1 column's top `shown`.
-function ResultColumn({ title, subtitle, items, note, shown, intent }) {
-  const changes = items.map((h, i) => (shown === undefined ? null : rankChange(h, i + 1, shown)));
-  const diffed = changes.some((ch) => ch);
+// Placeholder thumbnail tones (no product images in ESCI): each category hashes to one brand colour.
+const THUMB_TONES = ["navy", "blue", "green", "lava", "yellow", "maroon"];
+
+function thumbTone(category = "") {
+  let h = 0;
+  for (const ch of category) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return THUMB_TONES[h % THUMB_TONES.length];
+}
+
+// FLIP: after `key` changes, slide each tile (by id) from where it was to where it is now.
+function useFlip(ref, key) {
+  const prev = useRef(new Map());
+  useLayoutEffect(() => {
+    const tiles = [...(ref.current?.children ?? [])];
+    const next = new Map(tiles.map((el) => [el.dataset.id, el.getBoundingClientRect()]));
+    for (const el of tiles) {
+      const was = prev.current.get(el.dataset.id);
+      const now = next.get(el.dataset.id);
+      el.style.transition = "none";
+      el.style.transform = was ? `translate(${was.left - now.left}px, ${was.top - now.top}px)` : "scale(0.96)";
+      el.style.opacity = was ? "" : "0";
+    }
+    const frame = requestAnimationFrame(() => {
+      for (const el of tiles) {
+        el.style.transition = "transform 250ms ease-out, opacity 250ms ease-out";
+        el.style.transform = "";
+        el.style.opacity = "";
+      }
+    });
+    prev.current = next;
+    return () => cancelAnimationFrame(frame);
+  }, [key]);
+}
+
+const SERP_VIEWS = {
+  l1: ["Hybrid L1", "AI Search: our query vector + keyword match on title and brand"],
+  l2: ["L1 + L2", "DCNv2 reranks all L1 hits with session, user and item features"],
+};
+
+const PAGE_SIZE = 10;
+const PAGES = 4; // the server sends 4 pages; the "…" after them is decoration
+
+// A move up from another L1 page says which, so L2 lifting an item from deep in L1 shows.
+function pagedChange(ch, l1Rank, page) {
+  const from = Math.ceil(l1Rank / PAGE_SIZE);
+  return ch?.kind === "up" && from !== page + 1 ? { ...ch, label: `${ch.label} from p${from}` } : ch;
+}
+
+// The SERP: one product grid, toggled between the L1 order and the L2 rerank; L2 shows rank badges vs L1's top N.
+// Every page is in the one response, so paging is a slice: no new search, no new L2 call.
+function ResultGrid({ serp, intent }) {
+  const l2ok = !!serp.l2.items;
+  const [picked, setPicked] = useState("l2");
+  const [paged, setPaged] = useState({ serp, page: 0 });
+  const page = paged.serp === serp ? paged.page : 0; // a new search starts on page 1
+  const view = l2ok ? picked : "l1";
+  const all = view === "l2" ? serp.l2.items : serp.l1;
+  const allChanges = all.map((h, i) => (view === "l2" ? rankChange(h, i + 1, serp.l1.length) : null));
+  const pages = Math.min(PAGES, Math.ceil(all.length / PAGE_SIZE));
+  const start = page * PAGE_SIZE;
+  const items = all.slice(start, start + PAGE_SIZE);
+  const changes = allChanges.slice(start, start + PAGE_SIZE).map((ch, i) => pagedChange(ch, items[i].l1_rank, page));
+  const goTo = (p) => setPaged({ serp, page: p });
+  const grid = useRef(null);
+  useFlip(grid, `${serp.query}\n${view}\n${page}`);
+  const note = L2_STATUS[serp.l2.status] ?? serp.l2.status;
   return (
-    <section className="column">
-      <header>
-        <h2>{title}</h2>
-        <p className="subtitle">{subtitle}</p>
-        {note && <p className="note">{note}</p>}
-        {diffed && <p className="summary">{diffSummary(changes)}</p>}
-      </header>
-      <ol>
+    <>
+      <div className="serp-head">
+        <div className="toggle" role="group" aria-label="Ranking">
+          {Object.entries(SERP_VIEWS).map(([key, [label]]) => (
+            <button key={key} aria-pressed={view === key} onClick={() => setPicked(key)}
+              disabled={key === "l2" && !l2ok} title={key === "l2" && !l2ok ? note : undefined}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <h2>{serp.hits} results for “{serp.query}”</h2>
+      </div>
+      <p className="subtitle">
+        {SERP_VIEWS[view][1]}
+        {view === "l2" && <> · <span className="summary">{diffSummary(allChanges)}</span></>}
+      </p>
+      {!l2ok && <p className="note">{note}</p>}
+      <ol className="grid" ref={grid}>
         {items.map((h, i) => (
-          <li key={h.product_id} className={changes[i] ? `change-${changes[i].kind}` : undefined}>
-            <span className="completion">
-              {h.title}
-              {changes[i]?.label && <span className={`badge ${changes[i].kind}`}>{changes[i].label}</span>}
+          <li key={h.product_id} data-id={h.product_id}
+            className={["tile", changes[i] && `change-${changes[i].kind}`].filter(Boolean).join(" ")}>
+            <span className={`thumb ${thumbTone(h.category)}`} title={h.category}>{h.category?.[0] ?? "?"}</span>
+            {changes[i]?.label && <span className={`badge rank ${changes[i].kind}`} title={`L1 #${h.l1_rank}`}>
+              {changes[i].label}</span>}
+            <span className="ttitle" title={h.title}>{h.title}</span>
+            {h.brand && <span className="brand">{h.brand}</span>}
+            {h.price != null && <span className="price">${Number(h.price).toFixed(2)}</span>}
+            <span className="chips">
               {intentMatches(h, intent).map((m) => (
                 <span key={m} className="badge intent">{m}</span>
               ))}
             </span>
-            <span className="meta">
-              {[h.brand, h.category, h.price != null && `$${Number(h.price).toFixed(2)}`].filter(Boolean).join(" · ")}
-            </span>
           </li>
         ))}
       </ol>
-    </section>
+      {pages > 1 && (
+        <nav className="pager" aria-label="Result pages">
+          <button onClick={() => goTo(page - 1)} disabled={page === 0} aria-label="Previous page">‹</button>
+          {Array.from({ length: pages }, (_, p) => (
+            <button key={p} onClick={() => goTo(p)} aria-current={p === page ? "page" : undefined}>{p + 1}</button>
+          ))}
+          <span className="more" aria-hidden>…</span>
+          <button onClick={() => goTo(page + 1)} disabled={page === pages - 1} aria-label="Next page">›</button>
+          <span className="pager-note">All {pages} pages came back in this one search: paging makes no new call</span>
+        </nav>
+      )}
+    </>
   );
 }
 
@@ -613,7 +708,11 @@ export default function App() {
           serpBudget={cfg.serp_budget_ms} />
       </aside>
       <main>
-        <h1>Real-time search</h1>
+        <h1 className="store">
+          <img src="/logo.svg" alt="" />
+          Brick Lane Goods
+        </h1>
+        <p className="tagline">Real-time search on Databricks: session-aware autocomplete and results</p>
 
         <section className="scenario">
           <label>
@@ -648,11 +747,15 @@ export default function App() {
 
         {/* Focus leaving the box and its dropdown closes it; mousedown inside the dropdown keeps focus in the box */}
         <div className="searchbox" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
+          <svg className="search-icon" viewBox="0 0 24 24" aria-hidden>
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <line x1="15.5" y1="15.5" x2="21" y2="21" />
+          </svg>
           <input
             ref={input}
             className="search"
             autoFocus
-            placeholder="Start typing…"
+            placeholder="Search"
             value={q}
             role="combobox"
             aria-expanded={listed}
@@ -667,7 +770,7 @@ export default function App() {
             <div className="dropdown" onMouseDown={(e) => e.preventDefault()}>
               <div className="columns">
                 <Column title="Static" subtitle="L1: popularity from the prefix table" items={l1} intent={session?.intent}
-                  onPick={pick} />
+                  onPick={pick} prefix={result?.prefix} />
                 <Column
                   title="Session-aware"
                   subtitle={
@@ -684,6 +787,7 @@ export default function App() {
                   onPick={pick}
                   listId="qac-l2"
                   active={active}
+                  prefix={result?.prefix}
                 />
               </div>
             </div>
@@ -692,19 +796,8 @@ export default function App() {
 
         {serp && serp.l1.length > 0 && (
           <section className={`serp${searching ? " stale" : ""}`}>
+            <ResultGrid serp={serp} intent={session?.intent} />
             <SerpTimings serp={serp} />
-            <div className="columns">
-              <ResultColumn title="Hybrid L1" subtitle="AI Search: our query vector + keyword match on title and brand"
-                items={serp.l1} intent={session?.intent} />
-              <ResultColumn
-                title="L1 + L2"
-                subtitle="DCNv2 reranks all L1 hits with session, user and item features"
-                items={serp.l2.items ?? serp.l1}
-                note={L2_STATUS[serp.l2.status] ?? serp.l2.status}
-                shown={serp.l2.items ? serp.l1.length : undefined}
-                intent={session?.intent}
-              />
-            </div>
           </section>
         )}
         {serp && serp.l1.length === 0 && <p className="serp-timings">No results for “{serp.query}”</p>}

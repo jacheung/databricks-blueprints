@@ -74,6 +74,15 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   below the search box, top `SERP_N` = 10 each, with the QAC rank and intent badges; a line above gives hits and
   embed / search / L2 / server ms. Enter, a picked completion, or "Try …" then Enter searches, with the session and
   user ids.
+- [ ] QAC vs SERP look (2026-11-04, deployed; not yet checked in the browser): QAC rows are one-line
+  queries (⌕, typed prefix plain + rest bold, category tag on the right, searches / engaged in the tooltip). SERP is
+  one 5 × 2 product grid (category-coloured placeholder thumb, 2-line title, brand, price, intent chips) with a
+  `Hybrid L1 | L1 + L2` toggle (default L1 + L2, disabled unless L2 `ok`); rank badges in the L2 view only; tiles
+  slide between orders (FLIP). Replaces the two SERP columns. Checked in the browser by the user.
+- [ ] SERP pages (2026-11-04, deployed; not yet checked in the browser): `SERP_N` = 40, so `/api/search` returns 4
+  pages of 10 for L1 and L2 (L2 already reranks all 200 hits); `‹ 1 2 3 4 … ›` slices them client-side, no new call
+  ("…" is decoration). Page kept across the toggle, reset by a new search; diff summary covers all 40; an up move
+  from another L1 page reads e.g. `▲23 from p3`.
 - [ ] SERP L2 in `/api/search` (2026-11-04, deployed; 3 tests, 76 pass): every L1 hit → `serp_l2_records` →
   `rts-serp-l2` under the 200 ms `serp_l2` timeout on `L2_POOL`, falling back to the L1 order (`timeout` / `error`),
   like QAC. App resource `serp-l2` (`CAN_QUERY`); warmed at startup (as the SP: 1 candidate, 719 ms cold, OK).
