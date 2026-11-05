@@ -538,61 +538,31 @@ function CategoryGrid({ onPick }) {
   );
 }
 
-const RAIL_SIZE = 6;
-
-// A home-page row: the top results of one search for `q` with this user/session (L2 order when it ran). Not timed.
-function Rail({ title, subtitle, q, sessionId, userId, intent }) {
-  const [items, setItems] = useState(null);
-  useEffect(() => {
-    setItems(null);
-    if (!q) return;
-    let stop = false;
-    const params = new URLSearchParams({ q });
-    if (sessionId) params.set("session_id", sessionId);
-    if (userId) params.set("user_id", userId);
-    fetch(`/api/search?${params}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((res) => !stop && setItems(res ? (res.l2.items ?? res.l1).slice(0, RAIL_SIZE) : []));
-    return () => {
-      stop = true;
-    };
-  }, [q, sessionId, userId]);
-  if (!q || (items && !items.length)) return null;
+// Zero query: what the focused, empty search box offers. Trending searches (the QAC prefix table) for a fresh shopper;
+// the session's own past searches once a clickstream is replayed. A pill runs its search.
+function ZeroQuery({ title, pills, onPick }) {
   return (
-    <section className="home-section">
+    <div className="dropdown zero-query" onMouseDown={(e) => e.preventDefault()}>
       <h2>{title}</h2>
-      <p className="subtitle">{subtitle}</p>
-      <ol className="grid rail">
-        {items ? items.map((h) => <ProductTile key={h.product_id} h={h} intent={intent} />)
-          : Array.from({ length: RAIL_SIZE }, (_, i) => <li key={i} className="tile placeholder" />)}
-      </ol>
-    </section>
-  );
-}
-
-// Home-page trending searches (the QAC prefix table's most searched completions); a chip runs its search.
-function TrendingSearches({ onPick }) {
-  const [items, setItems] = useState([]);
-  useEffect(() => {
-    fetch("/api/trending").then((r) => (r.ok ? r.json() : [])).then(setItems).catch(() => {});
-  }, []);
-  if (!items.length) return null;
-  return (
-    <section className="home-section">
-      <h2>Trending now</h2>
-      <p className="subtitle">Most searched this week</p>
       <ul className="trending">
-        {items.map((t) => (
-          <li key={t.query}>
-            <button className="chip" onClick={() => onPick(t.query)} title={t.category}>
+        {pills.map((p) => (
+          <li key={p}>
+            <button className="chip" onClick={() => onPick(p)}>
               <span className="glyph" aria-hidden>⌕</span>
-              {t.query}
+              {p}
             </button>
           </li>
         ))}
       </ul>
-    </section>
+    </div>
   );
+}
+
+// The replayed session's searches, most recent first, each once (case-insensitive).
+function recentSearches(session) {
+  const seen = new Set();
+  return (session?.timeline ?? []).filter((e) => e.event_type === "search" && e.query).reverse()
+    .map((e) => e.query).filter((q) => !seen.has(q.toLowerCase()) && seen.add(q.toLowerCase()));
 }
 
 function CartIcon({ count }) {
@@ -721,6 +691,7 @@ export default function App() {
   const [scenarioId, setScenarioId] = useState("");
   const [session, setSession] = useState(null);
   const [personas, setPersonas] = useState([]);
+  const [trending, setTrending] = useState([]); // zero-query pills for a fresh shopper
   const [me, setMe] = useState(null); // the signed-in persona; null is a guest
   const userId = me?.user_id ?? null;
   const [playing, setPlaying] = useState(false);
@@ -749,6 +720,8 @@ export default function App() {
       })
       .catch(() => setError("Could not load scenarios"));
     fetch("/api/personas").then((r) => (r.ok ? r.json() : [])).then(setPersonas);
+    fetch("/api/trending").then((r) => (r.ok ? r.json() : [])).then((t) => setTrending(t.map((x) => x.query)))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -830,7 +803,10 @@ export default function App() {
   const l1 = result?.l1 ?? [];
   const l2 = result?.l2 ?? { status: "not_deployed" };
   const l2Items = l2.items ?? l1;
-  const listed = open && l2Items.length > 0;
+  const listed = open && !!q.trim() && l2Items.length > 0; // an empty box shows the zero-query panel instead
+  const recent = recentSearches(session);
+  const zeroQuery = recent.length ? { title: "Your recent searches", pills: recent } : { title: "Trending now", pills: trending };
+  const zeroOpen = open && !q.trim() && zeroQuery.pills.length > 0;
 
   // Searches with the current session, so L2 sees the same features QAC did; a newer search drops older responses.
   function runSearch(text) {
@@ -927,7 +903,7 @@ export default function App() {
         placeholder="Search"
         value={q}
         role="combobox"
-        aria-expanded={listed}
+        aria-expanded={listed || zeroOpen}
         aria-controls="qac-l2"
         aria-activedescendant={listed && active >= 0 ? `qac-l2-${active}` : undefined}
         onFocus={() => setOpen(true)}
@@ -935,6 +911,7 @@ export default function App() {
         onKeyDown={onKeyDown}
       />
 
+      {zeroOpen && <ZeroQuery title={zeroQuery.title} pills={zeroQuery.pills} onPick={pick} />}
       {listed && (
         <div className="dropdown" onMouseDown={(e) => e.preventDefault()}>
           <div className="columns">
@@ -989,12 +966,13 @@ export default function App() {
 
         {!serp && (
           <>
-            {session ? (
-              <Rail title="Picking up where you left off" subtitle={`From your session: “${session.next_query}”`}
-                q={session.next_query} sessionId={session.session_id} userId={userId} intent={session.intent} />
-            ) : <TrendingSearches onPick={pick} />}
-            <Rail title="Recommended for you" subtitle={me && `Because you shop ${me.category}`} q={me?.category}
-              sessionId={session?.session_id} userId={userId} intent={session?.intent} />
+            {/* Decoration only: the demo starts in the search bar above */}
+            <section className="hero">
+              <div className="hero-copy">
+                <h2>Needle in a brickstack?<br />We'll find it.</h2>
+                <p>Everything you're after, one search away.</p>
+              </div>
+            </section>
             <CategoryGrid onPick={pick} />
           </>
         )}

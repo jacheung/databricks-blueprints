@@ -18,6 +18,10 @@ the browser with an Amazon-style header layout and kept centered (the header fel
 Then (2026-11-05): "No clickstream (fresh shopper)" in the replay dropdown clears the session; the suggested next
 query (Try link, timeline row) is gone; with no session the home page shows "Trending now" chips from
 `/api/trending` (prefix table, one-letter prefixes, ≤ 3 words, by `pop_7d`; two rows max), frozen at the table's build.
+Then (2026-11-05, the user: the demo centres on the search bar): trending moved into the search dropdown as zero query
+(focused, empty box; after Play the pills are the session's past searches, newest first, from the Play response). The
+home page is now a decorative banner (`brand/hero_banner.py` → `public/hero.svg`, no buttons; "Needle in a brickstack? We'll find it." over a mound of bricks and product tiles, with a magnifier over a needle) plus Shop by category
+(SERP path). The Recommended for you and session product rows are gone (PARKING_LOT.md item 8).
 
 ## Next
 1. Check SERP in the browser: a full 200-candidate L2 call from the app (only the 1-candidate warm-up is verified,

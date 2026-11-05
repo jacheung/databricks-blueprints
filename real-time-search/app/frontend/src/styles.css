@@ -226,9 +226,6 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
   line-height: 1.1rem; text-align: center; }
 .home-section { margin-top: 2rem; }
 .home-section h2 { font-size: 1.15rem; }
-.grid.rail { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-@media (max-width: 720px) { .grid.rail { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-.tile.placeholder { min-height: 14rem; background: var(--oat-light); }
 .categories { list-style: none; padding: 0; margin: 0.8rem 0 0; display: grid; gap: 0.8rem;
   grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); }
 .categories li { margin: 0; padding: 0; }
@@ -245,3 +242,15 @@ li.change-new { background: color-mix(in srgb, var(--green-300) 40%, transparent
   background: var(--white); border: 1px solid var(--gray-lines); border-radius: 999px; font-weight: 500; }
 .chip:hover:not(:disabled) { background: var(--oat-medium); }
 .chip .glyph { color: var(--gray-text); }
+/* Zero query: the empty, focused search box offers pills in the dropdown */
+.zero-query { padding: 0.8rem 1rem 1rem; }
+.zero-query h2 { font-size: 0.8rem; font-weight: 600; color: var(--gray-text); }
+.zero-query .trending { margin-top: 0.6rem; }
+.zero-query li, .zero-query li:hover { margin: 0; padding: 0; background: none; cursor: default; }  /* not QAC rows */
+/* Home banner (art: brand/hero_banner.py); decoration only */
+.hero { position: relative; margin: 2rem -2rem 0; aspect-ratio: 1920 / 720; overflow: hidden; color: var(--oat-light);
+  background: url(/hero.svg) center / cover; }
+@media (max-width: 1056px) { .hero { margin: 1.5rem -1rem 0; } }
+.hero-copy { position: absolute; left: 3rem; top: 50%; transform: translateY(-50%); max-width: 26rem; }
+.hero-copy h2 { margin: 0; font-size: 3.1rem; line-height: 1; font-weight: 800; letter-spacing: -0.02em; }
+.hero-copy p { margin: 0.9rem 0 0; font-size: 1.05rem; line-height: 1.4; color: var(--gray-lines); }
