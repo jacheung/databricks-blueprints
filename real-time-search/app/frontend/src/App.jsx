@@ -497,6 +497,99 @@ function Column({ title, subtitle, items, note, shown, intent, onPick, listId, a
 const categoryIcon = (category = "") =>
   `/categories/${category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "other"}.svg`;
 
+// One product card: the SERP grid and the home page's rails both use it.
+function ProductTile({ h, change, intent }) {
+  return (
+    <li data-id={h.product_id} className={["tile", change && `change-${change.kind}`].filter(Boolean).join(" ")}>
+      <span className="thumb" title={h.category}>
+        <img src={categoryIcon(h.category ?? "")} alt={h.category ?? ""}
+          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/categories/other.svg"; }} />
+      </span>
+      {change?.label && <span className={`badge rank ${change.kind}`} title={`L1 #${h.l1_rank}`}>{change.label}</span>}
+      <span className="ttitle" title={h.title}>{h.title}</span>
+      {h.brand && <span className="brand">{h.brand}</span>}
+      {h.price != null && <span className="price">${Number(h.price).toFixed(2)}</span>}
+      <span className="chips">
+        {intentMatches(h, intent).map((m) => (
+          <span key={m} className="badge intent">{m}</span>
+        ))}
+      </span>
+    </li>
+  );
+}
+
+// The catalog's categories (shared/configs/*.yml `catalog.categories`); a click searches for the category.
+const CATEGORIES = ["Electronics", "Computers & Accessories", "Cell Phones & Accessories", "Camera & Photo",
+  "Home & Kitchen", "Tools & Home Improvement", "Clothing, Shoes & Jewelry", "Beauty & Personal Care",
+  "Health & Household", "Sports & Outdoors", "Toys & Games", "Baby", "Pet Supplies", "Grocery & Gourmet Food",
+  "Automotive", "Office Products", "Arts, Crafts & Sewing", "Books & Media", "Video Games", "Patio, Lawn & Garden"];
+
+function CategoryGrid({ onPick }) {
+  return (
+    <section className="home-section">
+      <h2>Shop by category</h2>
+      <ul className="categories">
+        {CATEGORIES.map((c) => (
+          <li key={c}>
+            <button className="category" onClick={() => onPick(c)}>
+              <span className="thumb">
+                <img src={categoryIcon(c)} alt=""
+                  onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/categories/other.svg"; }} />
+              </span>
+              {c}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+const RAIL_SIZE = 6;
+
+// A home-page row: the top results of one search for `q` with this user/session (L2 order when it ran). Not timed.
+function Rail({ title, subtitle, q, sessionId, userId, intent }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => {
+    setItems(null);
+    if (!q) return;
+    let stop = false;
+    const params = new URLSearchParams({ q });
+    if (sessionId) params.set("session_id", sessionId);
+    if (userId) params.set("user_id", userId);
+    fetch(`/api/search?${params}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res) => !stop && setItems(res ? (res.l2.items ?? res.l1).slice(0, RAIL_SIZE) : []));
+    return () => {
+      stop = true;
+    };
+  }, [q, sessionId, userId]);
+  if (!q || (items && !items.length)) return null;
+  return (
+    <section className="home-section">
+      <h2>{title}</h2>
+      <p className="subtitle">{subtitle}</p>
+      <ol className="grid rail">
+        {items ? items.map((h) => <ProductTile key={h.product_id} h={h} intent={intent} />)
+          : Array.from({ length: RAIL_SIZE }, (_, i) => <li key={i} className="tile placeholder" />)}
+      </ol>
+    </section>
+  );
+}
+
+function CartIcon({ count }) {
+  return (
+    <span className="cart" title={`${count} in cart (from the replayed clickstream)`}>
+      <svg viewBox="0 0 24 24" aria-hidden>
+        <path d="M3 4h2.5l2.2 10.5h10.6L20.5 7H6.6" />
+        <circle cx="9.5" cy="19" r="1.4" />
+        <circle cx="17" cy="19" r="1.4" />
+      </svg>
+      <span className="cart-count">{count}</span>
+    </span>
+  );
+}
+
 // FLIP: after `key` changes, slide each tile (by id) from where it was to where it is now.
 function useFlip(ref, key) {
   const prev = useRef(new Map());
@@ -573,25 +666,7 @@ function ResultGrid({ serp, intent }) {
       </p>
       {!l2ok && <p className="note">{note}</p>}
       <ol className="grid" ref={grid}>
-        {items.map((h, i) => (
-          <li key={h.product_id} data-id={h.product_id}
-            className={["tile", changes[i] && `change-${changes[i].kind}`].filter(Boolean).join(" ")}>
-            <span className="thumb" title={h.category}>
-              <img src={categoryIcon(h.category ?? "")} alt={h.category ?? ""}
-                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/categories/other.svg"; }} />
-            </span>
-            {changes[i]?.label && <span className={`badge rank ${changes[i].kind}`} title={`L1 #${h.l1_rank}`}>
-              {changes[i].label}</span>}
-            <span className="ttitle" title={h.title}>{h.title}</span>
-            {h.brand && <span className="brand">{h.brand}</span>}
-            {h.price != null && <span className="price">${Number(h.price).toFixed(2)}</span>}
-            <span className="chips">
-              {intentMatches(h, intent).map((m) => (
-                <span key={m} className="badge intent">{m}</span>
-              ))}
-            </span>
-          </li>
-        ))}
+        {items.map((h, i) => <ProductTile key={h.product_id} h={h} change={changes[i]} intent={intent} />)}
       </ol>
       {pages > 1 && (
         <nav className="pager" aria-label="Result pages">
@@ -806,6 +881,66 @@ export default function App() {
     setError(null);
   }
 
+  const cartCount = session?.timeline.filter((e) => e.event_type === "add_to_cart").length ?? 0;
+  const logo = (
+    <h1 className="store">
+      <a href="/" onClick={goHome}>
+        <img src="/logo.svg" alt="" />
+        Brick Lane Goods
+      </a>
+    </h1>
+  );
+  const searchBox = (
+    // Focus leaving the box and its dropdown closes it; mousedown inside the dropdown keeps focus in the box
+    <div className="searchbox" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
+      <svg className="search-icon" viewBox="0 0 24 24" aria-hidden>
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <line x1="15.5" y1="15.5" x2="21" y2="21" />
+      </svg>
+      <input
+        ref={input}
+        className="search"
+        autoFocus
+        placeholder="Search"
+        value={q}
+        role="combobox"
+        aria-expanded={listed}
+        aria-controls="qac-l2"
+        aria-activedescendant={listed && active >= 0 ? `qac-l2-${active}` : undefined}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => { keyAt.current = e.timeStamp; setQ(e.target.value); setActive(-1); setOpen(true); }}
+        onKeyDown={onKeyDown}
+      />
+
+      {listed && (
+        <div className="dropdown" onMouseDown={(e) => e.preventDefault()}>
+          <div className="columns">
+            <Column title="Static" subtitle="L1: popularity from the prefix table" items={l1} intent={session?.intent}
+              onPick={pick} prefix={result?.prefix} />
+            <Column
+              title="Session-aware"
+              subtitle={
+                <>
+                  L1 + L2: with features from{" "}
+                  <FeatureBar inputs={cfg.l2_inputs} freshness={freshness} userFeatures={userFeatures}
+                    top={l2Items[0]} session={session} userId={userId} />
+                </>
+              }
+              items={l2Items}
+              note={L2_STATUS[l2.status] ?? l2.status}
+              shown={l2.items ? l1.length : undefined}
+              intent={session?.intent}
+              onPick={pick}
+              listId="qac-l2"
+              active={active}
+              prefix={result?.prefix}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className={hoodOpen ? "page hood-open" : "page"}>
       {/* A drawer on the left edge: on wide screens it pushes the storefront over, on narrow ones it overlays it.
@@ -820,63 +955,24 @@ export default function App() {
           onPlay={play} playing={playing} onTry={onTry} />
       </aside>
       <main>
-        <SignIn personas={personas} me={me} onPick={setMe} />
-        <h1 className="store">
-          <a href="/" onClick={goHome}>
-            <img src="/logo.svg" alt="" />
-            Brick Lane Goods
-          </a>
-        </h1>
-
-        {/* Focus leaving the box and its dropdown closes it; mousedown inside the dropdown keeps focus in the box */}
-        <div className="searchbox" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
-          <svg className="search-icon" viewBox="0 0 24 24" aria-hidden>
-            <circle cx="10.5" cy="10.5" r="6.5" />
-            <line x1="15.5" y1="15.5" x2="21" y2="21" />
-          </svg>
-          <input
-            ref={input}
-            className="search"
-            autoFocus
-            placeholder="Search"
-            value={q}
-            role="combobox"
-            aria-expanded={listed}
-            aria-controls="qac-l2"
-            aria-activedescendant={listed && active >= 0 ? `qac-l2-${active}` : undefined}
-            onFocus={() => setOpen(true)}
-            onChange={(e) => { keyAt.current = e.timeStamp; setQ(e.target.value); setActive(-1); setOpen(true); }}
-            onKeyDown={onKeyDown}
-          />
-
-          {listed && (
-            <div className="dropdown" onMouseDown={(e) => e.preventDefault()}>
-              <div className="columns">
-                <Column title="Static" subtitle="L1: popularity from the prefix table" items={l1} intent={session?.intent}
-                  onPick={pick} prefix={result?.prefix} />
-                <Column
-                  title="Session-aware"
-                  subtitle={
-                    <>
-                      L1 + L2: with features from{" "}
-                      <FeatureBar inputs={cfg.l2_inputs} freshness={freshness} userFeatures={userFeatures}
-                        top={l2Items[0]} session={session} userId={userId} />
-                    </>
-                  }
-                  items={l2Items}
-                  note={L2_STATUS[l2.status] ?? l2.status}
-                  shown={l2.items ? l1.length : undefined}
-                  intent={session?.intent}
-                  onPick={pick}
-                  listId="qac-l2"
-                  active={active}
-                  prefix={result?.prefix}
-                />
-              </div>
-            </div>
-          )}
+        <p className="promo">Free shipping over $35 · Fresh picks daily</p>
+        <div className="account">
+          <SignIn personas={personas} me={me} onPick={setMe} />
+          <CartIcon count={cartCount} />
         </div>
+        {logo}
+        {searchBox}
         {error && <p className="error">{error}</p>}
+
+        {!serp && (
+          <>
+            <Rail title="Picking up where you left off" subtitle={session && `From your session: “${session.next_query}”`}
+              q={session?.next_query} sessionId={session?.session_id} userId={userId} intent={session?.intent} />
+            <Rail title="Recommended for you" subtitle={me && `Because you shop ${me.category}`} q={me?.category}
+              sessionId={session?.session_id} userId={userId} intent={session?.intent} />
+            <CategoryGrid onPick={pick} />
+          </>
+        )}
 
         {serp && serp.l1.length > 0 && (
           <section className={`serp${searching ? " stale" : ""}`}>
