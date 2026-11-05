@@ -595,7 +595,7 @@ export default function App() {
   const [serp, setSerp] = useState(null);
   const [searching, setSearching] = useState(false);
   const [serpE2e, setSerpE2e] = useState(null);
-  const [hoodOpen, setHoodOpen] = useState(() => window.innerWidth >= 1500); // open where it fits beside the store
+  const [hoodOpen, setHoodOpen] = useState(() => window.innerWidth >= 1440); // open where it fits beside the store (see .page.hood-open)
   const latestSearch = useRef(0);
   const input = useRef(null);
   const latest = useRef(0);
@@ -749,9 +749,9 @@ export default function App() {
   }
 
   return (
-    <div className="page">
-      {/* A drawer over the left edge, so the panel never moves the search bar. Hiding it only slides it away: it stays
-          mounted, so its timings and replay are kept. */}
+    <div className={hoodOpen ? "page hood-open" : "page"}>
+      {/* A drawer on the left edge: on wide screens it pushes the storefront over, on narrow ones it overlays it.
+          Hiding it only slides it away: it stays mounted, so its timings and replay are kept. */}
       <aside className={hoodOpen ? "drawer" : "drawer closed"}>
         <button className="drawer-tab" onClick={() => setHoodOpen((o) => !o)} aria-expanded={hoodOpen}
           aria-controls="hood" title={hoodOpen ? "Hide under the hood" : "Show under the hood"}>
