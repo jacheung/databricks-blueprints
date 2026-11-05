@@ -285,3 +285,18 @@ class RecentValues:
     def get(self, key: str):
         with self._lock:
             return self._values.get(key)
+
+
+def ranked_top(items: list, scores: list[float], k: int) -> list:
+    """The top `k` items by L2 score; ties keep the L1 order, as `qac` and `search` rank."""
+    return [items[i] for i in sorted(range(len(items)), key=lambda i: -scores[i])[:k]]
+
+
+def persona_lift(guest_tops: list[list[dict]], persona_tops: list[list[dict]], category: str, min_lift: float) -> dict:
+    """Share of `category` among the top results (one list per prefix or query), as a guest and as the persona. `ok`
+    when the persona's share is at least `min_lift` times the guest's, and above it."""
+    def share(tops):
+        return round(sum(r["category"] == category for t in tops for r in t) / max(1, sum(len(t) for t in tops)), 3)
+
+    guest, persona = share(guest_tops), share(persona_tops)
+    return {"guest": guest, "persona": persona, "ok": persona > guest and persona >= min_lift * guest}

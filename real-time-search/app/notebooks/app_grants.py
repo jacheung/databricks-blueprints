@@ -5,7 +5,7 @@
 # MAGIC
 # MAGIC The app's Lakebase resource gives its service principal a Postgres role that can connect but can't read our
 # MAGIC schema. This grants it `SELECT`, now and for tables created later in the schema, in both databases it reads:
-# MAGIC - `lakebase.database`: the synced tables (QAC prefixes, demo scenarios);
+# MAGIC - `lakebase.database`: the synced tables (QAC prefixes, demo scenarios and personas);
 # MAGIC - the Feature Store online tables' database, named after the catalog: the session features, which the app reads
 # MAGIC   back after a scenario Play to show how fresh they are.
 # MAGIC
@@ -40,7 +40,7 @@ CFG = load_config(dbutils.widgets.get("config_path"))
 w = WorkspaceClient()
 role = w.apps.get(name=dbutils.widgets.get("app_name")).service_principal_client_id
 schema = CFG["unity_catalog"]["schema"]
-synced = [CFG["tables"][k] for k in ("qac_prefix_online", "demo_scenarios_online")]
+synced = [CFG["tables"][k] for k in ("qac_prefix_online", "demo_scenarios_online", "demo_personas_online")]
 # The session Feature Views' online tables carry a generated suffix (rts_session_online_<suffix>).
 SESSION_TABLES = "SELECT relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " \
                  "WHERE n.nspname = :s AND c.relkind IN ('r', 'p') AND relname LIKE 'rts_session_online%'"

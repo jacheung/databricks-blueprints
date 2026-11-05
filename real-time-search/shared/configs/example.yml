@@ -109,6 +109,8 @@ tables:                            # short names; full name is catalog.schema.<n
   serp_l1_candidates: serp_l1_candidates   # hybrid top serp_l1_k per sampled query: query_id, rank, product_id, score
   demo_scenarios: demo_scenarios     # replayable starts of test-split sessions (demo_scenarios notebook)
   demo_scenarios_online: demo_scenarios_online   # Lakebase synced copy the app reads
+  demo_personas: demo_personas       # users the demo signs in as (demo_personas notebook)
+  demo_personas_online: demo_personas_online     # Lakebase synced copy the app reads
   session_events_ingest: session_events_ingest   # Kafka topic copy kept by the Stream; training history for session features
   sim_sessions: sim_sessions         # planted intent per session; evaluation only, never a feature
 
@@ -190,7 +192,12 @@ app:
   l2_enabled: {qac: true, serp: true}
   timeouts_ms: {qac_l2: 36, serp_l2: 200}   # L2 slower than this falls back to the L1 order. qac_l2 = 40 ms budget - L1 p95 (3.7 ms, app bench); serving has a ~25 ms floor (2026-11-03)
   qac_debounce_ms: 20
-  demo_scenarios: 6                 # half logged-in users, half guests; one intent category each
+  demo_scenarios: 6                 # one intent category each; replayed under whoever is signed in
+  demo_personas:                    # who the demo signs in as: the user most concentrated in each category (demo_personas)
+    - {name: Ali Ghodsi, category: Electronics}
+    - {name: Reynold Xin, category: "Camera & Photo"}
+    - {name: Matei Zaharia, category: "Clothing, Shoes & Jewelry"}
+  persona_min_events: 15            # category events in the user's 30-day history to qualify
 
 budgets_ms: {qac_total_p95: 40, serp_total_p95: 400}
 

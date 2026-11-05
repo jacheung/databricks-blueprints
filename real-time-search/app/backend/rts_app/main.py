@@ -29,7 +29,7 @@ from psycopg_pool import ConnectionPool
 
 from rts_app.service import (latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search,
                              expected_session_features, freshness_breakdown, l2_inputs, landed, time_calls,
-                             user_feature_values, with_timeout, RecentValues, SESSION_TABLES)
+                             user_feature_values, with_timeout, RecentValues, SESSION_TABLES, persona_lift, ranked_top)
 from rts_shared.config import full_name, load_config
 from rts_shared.kafka import producer as kafka_producer
 from rts_shared.lakebase import branch, features_database
@@ -179,6 +179,11 @@ def scenarios() -> dict[str, dict]:
     return {r["scenario_id"]: r for r in rows}
 
 
+def personas() -> list[dict]:
+    with pool.connection() as conn:
+        return conn.execute(f"SELECT * FROM {_table('demo_personas_online')} ORDER BY persona_id").fetchall()
+
+
 _producer = None
 
 
@@ -269,20 +274,62 @@ def bench_qac_l2(n: int = Query(100, ge=1, le=500), session_id: str | None = Non
 
 @app.get("/api/scenarios")
 def list_scenarios():
-    return [{k: s[k] for k in ("scenario_id", "label", "user_id", "next_query")} for s in scenarios().values()]
+    return [{k: s[k] for k in ("scenario_id", "label", "next_query")} for s in scenarios().values()]
+
+
+@app.get("/api/personas")
+def list_personas():
+    """Who the demo signs in as (data's demo_personas): a name, the simulated user and what their history holds."""
+    return [{k: p[k] for k in ("persona_id", "name", "user_id", "category", "category_share", "category_events_30d",
+                               "n_clicks_30d", "median_price_30d")} for p in personas()]
+
+
+# Persona check: broad prefixes and queries, where the candidates span categories so user history can reorder them.
+CHECK_PREFIXES = [*"abcdefghijklmnopqrstuvwxyz", "ba", "be", "bo", "ca", "ch", "co", "ha", "he", "ho", "ki", "la", "li",
+                  "ma", "mo", "pa", "pl", "sa", "sh", "sk", "sp", "st", "to", "tr", "wa", "wh"]
+CHECK_QUERIES = ["case", "bag", "charger", "brush", "light", "stand", "cleaner", "set", "cover", "kit", "holder", "gift"]
+CHECK_MIN_LIFT = 2.0
+
+
+@app.get("/api/checks/personas")
+def check_personas():
+    """Is Sign in worth showing? With no session, scores the same L1 candidates as a guest and as each persona; `ok`
+    when the persona's category share in the top results (QAC top 5, SERP top 10) at least doubles. Step 0
+    (2026-11-05) measured ~3-4x for QAC. If it fails, check the stale batch features gotcha in data/PLAN.md first.
+    Here rather than in a notebook: route-optimized endpoints need an OAuth token, which the app's SP has."""
+    n = QAC_L2["candidates"]
+    pools = [rows[:n] for rows in map(prefix_rows, CHECK_PREFIXES) if len({r["category"] for r in rows[:n]}) >= 2]
+    hits = [h for h in (query_index(**index_query(q, embed(q), "HYBRID", AI["serp_l1_k"], [SERP_INDEX_TEXT]))
+                        for q in CHECK_QUERIES) if h]
+
+    def tops(user_id):
+        return ([ranked_top(rows, qac_l2_scores(rows, None, user_id), 5) for rows in pools],
+                [ranked_top(hs, serp_l2_scores(hs, None, user_id), 10) for hs in hits])
+
+    guest_qac, guest_serp = tops(None)
+    report = []
+    for p in personas():
+        qac_tops, serp_tops = tops(p["user_id"])
+        report.append({"name": p["name"], "user_id": p["user_id"], "category": p["category"],
+                       "qac_top5": persona_lift(guest_qac, qac_tops, p["category"], CHECK_MIN_LIFT),
+                       "serp_top10": persona_lift(guest_serp, serp_tops, p["category"], CHECK_MIN_LIFT)})
+    return {"ok": bool(report) and all(r["qac_top5"]["ok"] and r["serp_top10"]["ok"] for r in report),
+            "prefixes": len(pools), "queries": len(hits), "min_lift": CHECK_MIN_LIFT, "personas": report}
 
 
 @app.post("/api/scenarios/{scenario_id}/play")
-def play(scenario_id: str):
+def play(scenario_id: str, user_id: str | None = None):
+    """Replays the scenario's clickstream as whoever is signed in (`user_id`, or a guest): identity comes from the
+    sign-in, not the scenario."""
     scenario = scenarios().get(scenario_id)
     if scenario is None:
         raise HTTPException(404, f"no scenario {scenario_id}")
     session_id = f"demo-{uuid.uuid4().hex[:10]}"
-    sent, kafka_ack_ms = play_scenario(scenario, session_id, producer(), CFG["kafka"]["topic"],
+    sent, kafka_ack_ms = play_scenario({**scenario, "user_id": user_id}, session_id, producer(), CFG["kafka"]["topic"],
                                        datetime.now(timezone.utc))
     PLAYED.record(session_id, {"expected": expected_session_features(sent), "last_event_time": sent[-1]["event_time"],
                                "kafka_ack_ms": kafka_ack_ms})
-    return {"session_id": session_id, "user_id": scenario["user_id"], "events": len(sent), "kafka_ack_ms": kafka_ack_ms,
+    return {"session_id": session_id, "user_id": user_id, "events": len(sent), "kafka_ack_ms": kafka_ack_ms,
             "next_query": scenario["next_query"], "timeline": scenario_timeline(sent),
             "intent": {k: scenario[f"intent_{k}"] for k in ("category", "brand", "price_target")}}
 
