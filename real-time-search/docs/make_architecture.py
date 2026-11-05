@@ -89,11 +89,18 @@ def node(icon, name, x, y, w, *lines, accent=False):
     return h
 
 
-def arrow(d, color=NAVY, width=1.5, dashed=False):
-    marker = "lava" if color == LAVA else "navy"
-    dash = ' stroke-dasharray="5 4"' if dashed else ""
-    out.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="{width}"{dash} '
-               f'marker-end="url(#{marker})"/>')
+# The four flows, each a moving dashed line (brand palette: Lava 500, Blue 500, Yellow 600, Navy 500)
+FLOWS = {
+    "fresh": ("#FF3621", "clickstream feature freshness"),
+    "qac": ("#4299E0", "QAC"),
+    "serp": ("#FFAB00", "SERP"),
+    "offline": ("#618794", "offline training"),
+}
+
+
+def arrow(d, flow, head=True, width=2.5):
+    end = f' marker-end="url(#{flow})"' if head else ""
+    out.append(f'<path d="{d}" class="flow" fill="none" stroke="{FLOWS[flow][0]}" stroke-width="{width}"{end}/>')
 
 
 def panel(x, y, w, h, name, subtitle, tint, stroke, center=None):
@@ -103,79 +110,84 @@ def panel(x, y, w, h, name, subtitle, tint, stroke, center=None):
     sub(tx, y + 52, subtitle, anchor=anchor)
 
 
-W, H, TOP = 1200, 935, 44  # TOP: the viewBox starts here
+W, H, TOP = 1200, 890, 44  # TOP: the viewBox starts here
 
 # --- App -------------------------------------------------------------------------------------------
 node("apps", "Apps", 360, 60, 480, "Search app · QAC dropdown + SERP results")  # bottom 125
 
-# --- Real-time features (left lane, 150-665) -------------------------------------------------------
-panel(40, 150, 520, 515, "REAL-TIME FEATURES", "", "#FFF6F3", "#FFC9BE")
+# --- Legend (left of the app box) ----------------------------------------------------------------
+for i, (flow, (_, label)) in enumerate(FLOWS.items()):
+    y = 72 + 19 * i  # sized halfway between subheading and title (the user, 2026-11-04); swatches don't move
+    out.append(f'<path d="M44 {y - 4.5} H82" fill="none" stroke="{FLOWS[flow][0]}" stroke-width="3.5" '
+               f'stroke-dasharray="8 6"/>')
+    title_chars.update(label)
+    out.append(f'<text x="94" y="{y}" class="t" style="font-size: 14px" fill="{NAVY}">{escape(label)}</text>')
+
+# --- Real-time features (left lane, 150-620) -------------------------------------------------------
+panel(40, 150, 520, 470, "REAL-TIME FEATURES", "", "#FFF6F3", "#FFC9BE")
 node("kafka", "Apache Kafka", 160, 200, 280, "clickstream events topic")  # 200-265
 node("rtm", "Spark Real-Time Mode", 140, 305, 320, "session Feature Views pipeline", accent=True)  # 305-370
 node("lakebase", "Lakebase", 140, 450, 320, "online store: session · user · item features",
      "+ QAC prefix completions", accent=True)  # 450-532
-arrow("M300 265 V301")
-arrow("M300 370 V446", LAVA, 2.5)
+arrow("M300 265 V301", "fresh")
+arrow("M300 370 V446", "fresh")
 sub(316, 405, "< 1 s freshness", LAVA, "start", 700)
 sub(316, 422, "event → online store", anchor="start")
 
-# --- L1 retrieval (right lane, 150-450) ------------------------------------------------------------
-panel(640, 150, 520, 300, "L1 RETRIEVAL", "candidates from Lakebase and AI Search", "#FFFFFF", "#C9D3D8", center=900)
+# --- L1 retrieval (right lane, 150-430) ------------------------------------------------------------
+panel(640, 150, 520, 280, "L1 RETRIEVAL", "candidates from Lakebase and AI Search", "#FFFFFF", "#C9D3D8", center=900)
 title(785, 232, "QAC autocomplete")
 sub(785, 250, "p95 budget 40 ms")
 title(1030, 232, "SERP results")
 sub(1030, 250, "p95 budget 400 ms")
 node("lakebase", "Lakebase", 665, 265, 210, "prefix lookup")  # 265-330
-node("serving", "Model Serving", 925, 265, 210, "query embedding", "GTE · T4 GPU")  # 265-347
-node("lakebase", "AI Search", 925, 367, 210, "hybrid search")  # 367-432
-arrow("M1030 347 V363")
+node("serving", "Model Serving", 925, 265, 210, "embedding · GTE · T4 GPU")  # 265-330
+node("lakebase", "AI Search", 925, 350, 210, "hybrid search")  # 350-415
+arrow("M1030 330 V346", "serp")
 
-# --- L2 reranker (right lane, 465-665) -------------------------------------------------------------
-panel(640, 465, 520, 200, "L2 RERANKER", "personalized: session + logged-in history", "#F4F7F9", "#C9D3D8",
+# --- L2 reranker (right lane, 445-620) -------------------------------------------------------------
+panel(640, 445, 520, 175, "L2 RERANKER", "personalized: session + logged-in history", "#F4F7F9", "#C9D3D8",
       center=900)
-node("serving", "Model Serving", 665, 535, 210, "LightGBM · CPU", accent=True)  # 535-600
-node("serving", "Model Serving", 925, 535, 210, "DCNv2 · T4 GPU", accent=True)
-arrow("M770 330 V531")
-arrow("M1030 432 V531")
+node("serving", "Model Serving", 665, 515, 210, "LightGBM · CPU", accent=True)  # 515-580
+node("serving", "Model Serving", 925, 515, 210, "DCNv2 · T4 GPU", accent=True)
+arrow("M770 330 V511", "qac")
+arrow("M1030 415 V511", "serp")
 
 # App -> Kafka and App -> L1
-arrow("M420 125 V196")
+arrow("M420 125 V196", "fresh")
 sub(432, 142, "clicks · searches", anchor="start", weight=500)
-arrow("M686 125 V261")
+arrow("M686 125 V261", "qac")
 sub(678, 142, "keystroke", anchor="end", weight=500)
-arrow("M820 125 V138 H1100 V261")
+arrow("M820 125 V138 H1100 V261", "serp")
 sub(1108, 168, "search", anchor="start", weight=500)
 
 # L2 -> App: ranked results
-arrow("M665 567 H615 V129")
+arrow("M665 547 H615 V129", "qac")
 sub(607, 340, "ranked completions", NAVY, weight=500, rotate=True)
-arrow("M1135 567 H1180 V92 H844")
+arrow("M1135 547 H1180 V92 H844", "serp")
 sub(1172, 84, "ranked products", NAVY, "end", 500)
 
 # Feature lookup bus: Lakebase -> both L2 endpoints (the point where features meet serving)
-arrow("M460 491 H590 V625 H1030 V604", LAVA, 2.5)
-arrow("M770 625 V604", LAVA, 2.5)
-sub(900, 648, "online feature lookup by session / user / item key", LAVA, weight=600)
+arrow("M460 491 H590 V600 H1030 V584", "fresh")
+arrow("M770 600 V584", "fresh")
 
-# --- Offline training (bottom band, 690-915) -------------------------------------------------------
-panel(40, 690, 1120, 225, "OFFLINE TRAINING", "the same clickstream, point-in-time correct", "#FFFFFF", "#C9D3D8")
-node("delta", "Delta tables", 125, 780, 190, "clickstream history")  # 780-845
-node("feature_store", "Feature Store", 400, 771, 180, "Feature Views", "point-in-time training sets")  # 771-853
-node("training", "Model Training", 700, 750, 220, "QAC L2 · LightGBM")  # 750-815
-node("ai_runtime", "AI Runtime", 700, 830, 220, "SERP L2 · DCNv2 on GPU")  # 830-895
-node("mlflow", None, 960, 785, 180, "model registry")  # 785-850
+# --- Offline training (bottom band, 645-870) -------------------------------------------------------
+panel(40, 645, 1120, 225, "OFFLINE TRAINING", "the same clickstream, point-in-time correct", "#FFFFFF", "#C9D3D8")
+node("delta", "Delta tables", 125, 735, 190, "clickstream history")  # 735-800
+node("feature_store", "Feature Store", 400, 726, 180, "Feature Views", "point-in-time training sets")  # 726-808
+node("training", "Model Training", 700, 705, 220, "QAC L2 · LightGBM")  # 705-770
+node("ai_runtime", "AI Runtime", 700, 785, 220, "SERP L2 · DCNv2 on GPU")  # 785-850
+node("mlflow", None, 960, 740, 180, "model registry")  # 740-805
 
-arrow("M160 232 H24 V812 H121")  # Kafka -> Delta (ingestion pipeline)
-sub(30, 804, "ingest", anchor="start", weight=500)
-arrow("M315 812 H396")
-arrow("M580 797 H650 V782 H696")
-arrow("M580 827 H650 V862 H696")
-arrow("M920 782 H940 V805 H956")
-arrow("M920 862 H940 V835 H956")
-arrow("M305 780 V536")  # Delta -> Lakebase: hourly user / item features
-sub(316, 610, "hourly user / item features", anchor="start", weight=500)
-arrow("M1050 785 V669", dashed=True)  # registry -> serving
-sub(1060, 682, "deploy", anchor="start", weight=500)
+arrow("M160 232 H24 V767 H121", "offline")  # Kafka -> Delta (ingestion pipeline)
+sub(30, 759, "ingest", anchor="start", weight=500)
+arrow("M315 767 H396", "offline")
+arrow("M580 752 H650 V737 H696", "offline")
+arrow("M580 782 H650 V817 H696", "offline")
+arrow("M920 737 H940 V760 H956", "offline")
+arrow("M920 817 H940 V790 H956", "offline")
+arrow("M305 735 V536", "offline")  # Delta -> Lakebase: hourly user / item features
+arrow("M1050 740 V624", "offline")  # registry -> serving
 
 # Title font: semibold instance subset to the characters used, as WOFF2
 opts = subset.Options()
@@ -188,14 +200,20 @@ font.flavor = "woff2"
 font.save(buf)
 font_b64 = base64.b64encode(buf.getvalue()).decode()
 
+markers = "\n".join(
+    f'<marker id="{flow}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto">'
+    f'<path d="M0 0 L10 5 L0 10 z" fill="{color}"/></marker>' for flow, (color, _) in FLOWS.items())
+
 svg = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 {TOP} {W} {H - TOP}" width="{W}" height="{H - TOP}" font-family="{BODY_FONT}">
 <defs>
 <style>
 @font-face {{ font-family: "DM Sans"; font-weight: 600; src: url(data:font/woff2;base64,{font_b64}) format("woff2"); }}
 .t {{ font-family: "DM Sans", {BODY_FONT}; font-size: {TITLE}px; font-weight: 600; }}
+.flow {{ stroke-dasharray: 8 6; animation: flow 0.8s linear infinite; }}
+@keyframes flow {{ to {{ stroke-dashoffset: -14; }} }}
+@media (prefers-reduced-motion: reduce) {{ .flow {{ animation: none; }} }}
 </style>
-<marker id="navy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="{NAVY}"/></marker>
-<marker id="lava" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="{LAVA}"/></marker>
+{markers}
 </defs>
 <rect y="{TOP}" width="{W}" height="{H - TOP}" fill="#FFFFFF"/>
 {chr(10).join(out)}
