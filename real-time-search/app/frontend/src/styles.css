@@ -25,14 +25,17 @@ aside .hood { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overf
   aside { order: 2; max-width: none; padding: 0 1rem 2rem; }
 }
 h1 { font-size: 1.5rem; margin-bottom: 0.2rem; }
-h1.store { display: flex; align-items: center; gap: 0.6rem; }
-h1.store img { height: 2.4rem; }
-.tagline { font-size: 0.9rem; color: var(--gray-text); margin: 0 0 1.2rem; }
+h1.store { display: flex; justify-content: center; align-items: center; gap: 0.7rem; font-size: 1.9rem; margin: 2.5rem 0 1.5rem; }
+h1.store img { height: 3rem; }
+h1.store a { display: flex; align-items: center; gap: inherit; color: inherit; text-decoration: none; }
 h2 { font-size: 1.05rem; margin: 0; }
-.scenario { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin-bottom: 1.25rem; }
-.scenario label { display: flex; flex-direction: column; font-size: 0.85rem; gap: 0.25rem; }
+/* Shopper replay: the demo's controls, at the top of Under the hood */
+.replay { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem;
+  border-bottom: 1px solid var(--oat-medium); padding-bottom: 0.7rem; margin-bottom: 0.4rem; }
+.replay label { display: flex; flex-direction: column; align-self: stretch; font-size: 0.85rem; font-weight: 600; gap: 0.3rem; }
+.replay select { width: 100%; min-width: 0; }
 select, button, .search { font: inherit; }
-select { padding: 0.4rem; min-width: 26rem; }
+select { padding: 0.4rem; }
 button { padding: 0.45rem 0.9rem; cursor: pointer; color: var(--white); background: var(--lava-700); border: 0; border-radius: 4px; font-weight: 600; }
 button:hover:not(:disabled) { background: var(--lava-800); }
 button:disabled { background: var(--navy-300); cursor: default; }
@@ -40,8 +43,7 @@ select, .search { color: var(--navy-800); background: var(--white); border: 1px 
 .search:focus { outline: 2px solid var(--lava-600); outline-offset: -1px; }
 button.link { padding: 0; border: 0; background: none; color: var(--lava-700); font-weight: 400; text-decoration: underline; }
 .session, .error, .note, .subtitle { font-size: 0.85rem; margin: 0.25rem 0; }
-.session { flex-basis: 100%; }
-.error { color: var(--maroon-700); flex-basis: 100%; }
+.error { color: var(--maroon-700); }
 .search { width: 100%; box-sizing: border-box; padding: 0.7rem 0.9rem; font-size: 1.1rem; }
 .subtitle, .meta { color: var(--gray-text); }
 .columns { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; column-gap: 1rem; margin-top: 1rem; }

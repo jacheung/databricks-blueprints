@@ -229,12 +229,38 @@ function SerpBar({ e2e, budget }) {
 
 // The side panel: how fast the replayed clicks reached the features and how fast a keystroke reaches the screen, then
 // what was replayed. The keystroke bar has a fixed axis; the clickstream bar fits its total.
-function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget }) {
+function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget,
+                       scenarios, scenarioId, onScenario, onPlay, playing, onTry }) {
   const typed = result?.prefix?.trim(); // the empty box is not a keystroke to time
   const freshScale = freshness?.status === "ready" ? Math.max(freshness.total_ms, 1) : 1;
   return (
     <section className="hood">
       <h2>Under the hood</h2>
+      {/* Demo controls live here, so the storefront shows only the logo and the search bar */}
+      <section className="replay">
+        <label>
+          Shopper replay
+          <select value={scenarioId} onChange={(e) => onScenario(e.target.value)}>
+            {scenarios.map((s) => (
+              <option key={s.scenario_id} value={s.scenario_id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button onClick={onPlay} disabled={!scenarioId || playing}>
+          {playing ? "Replaying…" : "Play clickstream"}
+        </button>
+        {session && (
+          <p className="session">
+            Replayed {session.events} events to Kafka as <code>{session.session_id}</code>
+            {session.user_id ? ` (user ${session.user_id})` : " (guest)"}. Try{" "}
+            <button className="link" onClick={onTry}>
+              “{session.next_query}”
+            </button>
+          </p>
+        )}
+      </section>
       <ClickstreamBar session={session} freshness={freshness} scale={freshScale} />
       <ScreenBar e2e={typed ? e2e : null} />
       <SerpBar e2e={serpE2e} budget={serpBudget} />
@@ -700,50 +726,43 @@ export default function App() {
     }
   }
 
+  // The replay's "Try" link types its next query into the box (timed like a keystroke).
+  function onTry(e) {
+    keyAt.current = e.timeStamp;
+    setQ(session.next_query);
+    setActive(-1);
+    input.current.focus(); // opens the dropdown
+  }
+
+  // The logo goes "home": clear the query and results without a reload, so the replayed session stays.
+  function goHome(e) {
+    e.preventDefault();
+    latestSearch.current++; // drop an in-flight search
+    keyAt.current = null; // clearing the box is not a keystroke to time
+    setQ("");
+    setActive(-1);
+    setOpen(false);
+    setSerp(null);
+    setSerpE2e(null);
+    setSearching(false);
+    setError(null);
+  }
+
   return (
     <div className="page">
       {/* A side column, so the panel never moves the search bar */}
       <aside>
         <UnderTheHood session={session} result={result} freshness={freshness} e2e={e2e} serpE2e={serpE2e}
-          serpBudget={cfg.serp_budget_ms} />
+          serpBudget={cfg.serp_budget_ms} scenarios={scenarios} scenarioId={scenarioId} onScenario={setScenarioId}
+          onPlay={play} playing={playing} onTry={onTry} />
       </aside>
       <main>
         <h1 className="store">
-          <img src="/logo.svg" alt="" />
-          Brick Lane Goods
+          <a href="/" onClick={goHome}>
+            <img src="/logo.svg" alt="" />
+            Brick Lane Goods
+          </a>
         </h1>
-        <p className="tagline">Real-time search on Databricks: session-aware autocomplete and results</p>
-
-        <section className="scenario">
-          <label>
-            Scenario
-            <select value={scenarioId} onChange={(e) => setScenarioId(e.target.value)}>
-              {scenarios.map((s) => (
-                <option key={s.scenario_id} value={s.scenario_id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button onClick={play} disabled={!scenarioId || playing}>
-            {playing ? "Replaying…" : "Play clickstream"}
-          </button>
-          {session && (
-            <p className="session">
-              Replayed {session.events} events to Kafka as <code>{session.session_id}</code>
-              {session.user_id ? ` (user ${session.user_id})` : " (guest)"}. Try{" "}
-              <button className="link" onClick={(e) => {
-                keyAt.current = e.timeStamp;
-                setQ(session.next_query);
-                setActive(-1);
-                input.current.focus(); // opens the dropdown
-              }}>
-                “{session.next_query}”
-              </button>
-            </p>
-          )}
-          {error && <p className="error">{error}</p>}
-        </section>
 
         {/* Focus leaving the box and its dropdown closes it; mousedown inside the dropdown keeps focus in the box */}
         <div className="searchbox" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
@@ -793,6 +812,7 @@ export default function App() {
             </div>
           )}
         </div>
+        {error && <p className="error">{error}</p>}
 
         {serp && serp.l1.length > 0 && (
           <section className={`serp${searching ? " stale" : ""}`}>
