@@ -29,23 +29,26 @@ from psycopg_pool import ConnectionPool
 
 from rts_app.service import (latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search,
                              expected_session_features, freshness_breakdown, l2_inputs, landed, time_calls,
-                             user_feature_values, with_timeout, RecentValues, SESSION_TABLES)
+                             user_feature_values, with_timeout, RecentValues, SESSION_TABLES, persona_lift, ranked_top)
 from rts_shared.config import full_name, load_config
 from rts_shared.kafka import producer as kafka_producer
 from rts_shared.lakebase import branch, features_database
-from rts_shared.retrieval import SERP_INDEX_COLUMNS, SERP_INDEX_TEXT, qac_l2_records
+from rts_shared.retrieval import SERP_INDEX_COLUMNS, SERP_INDEX_TEXT, qac_l2_records, serp_l2_records
 
 ROOT = Path(__file__).resolve().parents[3]  # app/backend/rts_app/main.py -> source root
 CFG = load_config(str(ROOT / os.environ.get("RTS_CONFIG", "shared/configs/dev.yml")))
 LB, APP, AI = CFG["lakebase"], CFG["app"], CFG["ai_search"]
 EMBED_ENDPOINT = CFG["models"]["query_embedding"]["endpoint"]
 QAC_L2 = CFG["models"]["qac_l2"]
+SERP_L2_ENDPOINT = CFG["models"]["serp_l2"]["endpoint"]
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("rts_app")
 QAC_L2_TIMEOUT_S = APP["timeouts_ms"]["qac_l2"] / 1000
+SERP_L2_TIMEOUT_S = APP["timeouts_ms"]["serp_l2"] / 1000
 L2_POOL = ThreadPoolExecutor(max_workers=8)  # timed-out calls finish here without holding the request
 SCHEMA = CFG["unity_catalog"]["schema"]
 QAC_N = 10
+SERP_N = 40  # 4 UI pages of 10; L2 reranks every L1 hit either way, so paging needs no extra call
 L2_INPUTS = l2_inputs(CFG)
 w = WorkspaceClient()
 
@@ -118,6 +121,22 @@ def qac_l2_scores(rows: list[dict], session_id: str | None, user_id: str | None,
             L2_TIMES.record(request_id, round(ms, 2))
 
 
+def serp_l2_scores(hits: list[dict], session_id: str | None, user_id: str | None) -> list[float]:
+    # Same lookups as QAC L2 (session and user features by key), plus item features by product_id. Runs on L2_POOL.
+    t = time.perf_counter()
+    try:
+        scores = w.serving_endpoints_data_plane.query(
+            name=SERP_L2_ENDPOINT, dataframe_records=serp_l2_records(hits, session_id, user_id)).predictions
+    except Exception:
+        log.exception("serp_l2 call failed")
+        raise
+    finally:
+        log.info("serp_l2 call %.1f ms, %d candidates", (time.perf_counter() - t) * 1000, len(hits))
+    if len(scores) != len(hits):
+        raise ValueError(f"serp_l2 returned {len(scores)} scores for {len(hits)} hits")
+    return scores
+
+
 def query_index(**kw) -> list[dict]:
     r = w.vector_search_indexes.query_index(index_name=full_name(CFG, AI["index"]), columns=list(SERP_INDEX_COLUMNS),
                                             **kw)
@@ -160,6 +179,11 @@ def scenarios() -> dict[str, dict]:
     return {r["scenario_id"]: r for r in rows}
 
 
+def personas() -> list[dict]:
+    with pool.connection() as conn:
+        return conn.execute(f"SELECT * FROM {_table('demo_personas_online')} ORDER BY persona_id").fetchall()
+
+
 _producer = None
 
 
@@ -175,13 +199,15 @@ app = FastAPI(title="real-time-search")
 
 @app.get("/api/config")
 def config():
-    return {"qac_debounce_ms": APP["qac_debounce_ms"], "qac_n": QAC_N, "l2_inputs": L2_INPUTS}
+    return {"qac_debounce_ms": APP["qac_debounce_ms"], "qac_n": QAC_N, "l2_inputs": L2_INPUTS,
+            "serp_budget_ms": CFG["budgets_ms"]["serp_total_p95"]}
 
 
 def _warm():
     try:
         embed("warm up")
         qac_l2_scores(prefix_rows("ca")[:1], None, None)
+        serp_l2_scores(query_index(query_type="ANN", query_vector=embed("warm up"), num_results=1), None, None)
     except Exception:
         logging.exception("endpoint warm-up failed; the first requests pay the connection cost")
 
@@ -210,9 +236,14 @@ def qac_l2_time(request_id: str):
 
 
 @app.get("/api/search")
-def get_search(q: str = "", mode: Literal["HYBRID", "ANN"] = "HYBRID", session_id: str | None = None):
+def get_search(q: str = "", mode: Literal["HYBRID", "ANN"] = "HYBRID", session_id: str | None = None,
+               user_id: str | None = None):
     # Keyword matching covers search_text only, as in serp_l1_ai_search's recall run.
-    return search(q, embed, query_index, mode, AI["serp_l1_k"], [SERP_INDEX_TEXT]) | {"session_id": session_id}
+    def rerank(hits):
+        return with_timeout(L2_POOL, lambda: serp_l2_scores(hits, session_id, user_id), SERP_L2_TIMEOUT_S)
+
+    return (search(q, embed, query_index, mode, AI["serp_l1_k"], [SERP_INDEX_TEXT], rerank, SERP_N)
+            | {"session_id": session_id, "user_id": user_id})
 
 
 @app.get("/api/bench/qac_l1")
@@ -243,20 +274,62 @@ def bench_qac_l2(n: int = Query(100, ge=1, le=500), session_id: str | None = Non
 
 @app.get("/api/scenarios")
 def list_scenarios():
-    return [{k: s[k] for k in ("scenario_id", "label", "user_id", "next_query")} for s in scenarios().values()]
+    return [{k: s[k] for k in ("scenario_id", "label", "next_query")} for s in scenarios().values()]
+
+
+@app.get("/api/personas")
+def list_personas():
+    """Who the demo signs in as (data's demo_personas): a name, the simulated user and what their history holds."""
+    return [{k: p[k] for k in ("persona_id", "name", "user_id", "category", "category_share", "category_events_30d",
+                               "n_clicks_30d", "median_price_30d")} for p in personas()]
+
+
+# Persona check: broad prefixes and queries, where the candidates span categories so user history can reorder them.
+CHECK_PREFIXES = [*"abcdefghijklmnopqrstuvwxyz", "ba", "be", "bo", "ca", "ch", "co", "ha", "he", "ho", "ki", "la", "li",
+                  "ma", "mo", "pa", "pl", "sa", "sh", "sk", "sp", "st", "to", "tr", "wa", "wh"]
+CHECK_QUERIES = ["case", "bag", "charger", "brush", "light", "stand", "cleaner", "set", "cover", "kit", "holder", "gift"]
+CHECK_MIN_LIFT = 2.0
+
+
+@app.get("/api/checks/personas")
+def check_personas():
+    """Is Sign in worth showing? With no session, scores the same L1 candidates as a guest and as each persona; `ok`
+    when the persona's category share in the top results (QAC top 5, SERP top 10) at least doubles. Step 0
+    (2026-11-05) measured ~3-4x for QAC. If it fails, check the stale batch features gotcha in data/PLAN.md first.
+    Here rather than in a notebook: route-optimized endpoints need an OAuth token, which the app's SP has."""
+    n = QAC_L2["candidates"]
+    pools = [rows[:n] for rows in map(prefix_rows, CHECK_PREFIXES) if len({r["category"] for r in rows[:n]}) >= 2]
+    hits = [h for h in (query_index(**index_query(q, embed(q), "HYBRID", AI["serp_l1_k"], [SERP_INDEX_TEXT]))
+                        for q in CHECK_QUERIES) if h]
+
+    def tops(user_id):
+        return ([ranked_top(rows, qac_l2_scores(rows, None, user_id), 5) for rows in pools],
+                [ranked_top(hs, serp_l2_scores(hs, None, user_id), 10) for hs in hits])
+
+    guest_qac, guest_serp = tops(None)
+    report = []
+    for p in personas():
+        qac_tops, serp_tops = tops(p["user_id"])
+        report.append({"name": p["name"], "user_id": p["user_id"], "category": p["category"],
+                       "qac_top5": persona_lift(guest_qac, qac_tops, p["category"], CHECK_MIN_LIFT),
+                       "serp_top10": persona_lift(guest_serp, serp_tops, p["category"], CHECK_MIN_LIFT)})
+    return {"ok": bool(report) and all(r["qac_top5"]["ok"] and r["serp_top10"]["ok"] for r in report),
+            "prefixes": len(pools), "queries": len(hits), "min_lift": CHECK_MIN_LIFT, "personas": report}
 
 
 @app.post("/api/scenarios/{scenario_id}/play")
-def play(scenario_id: str):
+def play(scenario_id: str, user_id: str | None = None):
+    """Replays the scenario's clickstream as whoever is signed in (`user_id`, or a guest): identity comes from the
+    sign-in, not the scenario."""
     scenario = scenarios().get(scenario_id)
     if scenario is None:
         raise HTTPException(404, f"no scenario {scenario_id}")
     session_id = f"demo-{uuid.uuid4().hex[:10]}"
-    sent, kafka_ack_ms = play_scenario(scenario, session_id, producer(), CFG["kafka"]["topic"],
+    sent, kafka_ack_ms = play_scenario({**scenario, "user_id": user_id}, session_id, producer(), CFG["kafka"]["topic"],
                                        datetime.now(timezone.utc))
     PLAYED.record(session_id, {"expected": expected_session_features(sent), "last_event_time": sent[-1]["event_time"],
                                "kafka_ack_ms": kafka_ack_ms})
-    return {"session_id": session_id, "user_id": scenario["user_id"], "events": len(sent), "kafka_ack_ms": kafka_ack_ms,
+    return {"session_id": session_id, "user_id": user_id, "events": len(sent), "kafka_ack_ms": kafka_ack_ms,
             "next_query": scenario["next_query"], "timeline": scenario_timeline(sent),
             "intent": {k: scenario[f"intent_{k}"] for k in ("category", "brand", "price_target")}}
 

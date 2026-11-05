@@ -15,7 +15,7 @@ Read this file, then the plan for your track only.
 
 | Track | Worktree and branch | Status |
 |---|---|---|
-| app | worktree `~/GitHub/databricks-blueprints-rts-app`, branch `rts-app` | QAC L1 + L2 demo: Under-the-hood panel, L2 inputs bar, keystroke → on screen timing; 20 ms debounce, L2 on CPU Medium (warm: 6% miss the 36 ms timeout); QAC in a dropdown under the search box; next: SERP results below it, then SERP L2 |
+| app | worktree `~/GitHub/databricks-blueprints-rts-app`, branch `rts-app` | QAC L1 + L2 demo: Under-the-hood panel, L2 inputs bar, keystroke → on screen timing; 20 ms debounce, L2 on CPU Medium (warm: 6% miss the 36 ms timeout); QAC in a dropdown under the search box; SERP L1 + L2 results below it and a Search → results bar, deployed, browser check pending; next: step 7 |
 | ml | worktree `~/GitHub/databricks-blueprints-rts-ml`, branch `rts-ml` | QAC L2 v2 served; SERP L2 done: DCNv2 v2 +0.065 NDCG@10 (≈ LightGBM); e2e CPU LightGBM 92 ms vs T4 DCNv2 101 ms p50 at 200; app serves DCNv2: `rts-serp-l2` (T4) READY; whole SERP path from a laptop p50 444 / p95 502 ms (embed 122, L1 216, L2 102 p50) |
 | data | no session; work from the main checkout when needed | Done except the full ~97K-query run and replay-before-materialize |
 
@@ -111,7 +111,7 @@ Checked by tests, not by sessions agreeing. Change one only under rule 1.
 | Online table names for the session features (session panel) | app | data | done by the app: found in Postgres database `main` (named after the catalog) via `pg_catalog` |
 | Possible train/serve skew: online `sess_last_event_type` is the last click/cart (2026-11-03: sc1 ends `back`, sc5 `search`, both online `click`), but `feature_specs` defines it over all events. Check what training saw | app | data, ml | ml answered 2026-11-04: training always saw `search` (offline `ColumnSelection` includes the event at the label time; window counts exclude it), so the skew is real. SERP L2 drops the feature; QAC can't be affected (constant in training, LightGBM never split on it). Open for data: intended semantics |
 | `rts-qac-l2` session lookups checked from the app via scenario Play | ml | app | open |
-| Wire SERP L2 into `/api/search`: L1 hits → `serp_l2_records` (session, user, candidates) → endpoint under the 200 ms `serp_l2` timeout, falling back to the L1 order. Model: DCNv2 v2 on the T4 (the user, 2026-11-03). `rts-serp-l2` is READY (2026-11-03) | ml | app | open |
+| Wire SERP L2 into `/api/search`: L1 hits → `serp_l2_records` (session, user, candidates) → endpoint under the 200 ms `serp_l2` timeout, falling back to the L1 order. Model: DCNv2 v2 on the T4 (the user, 2026-11-03). `rts-serp-l2` is READY (2026-11-03) | ml | app | done 2026-11-04 (deployed; 200-candidate call from the app still to check in the browser) |
 
 ## Where things are
 - Local code: this folder. Bundles deploy to `/Workspace/Users/jon.cheung@databricks.com/real-time-search/<bundle>/files/`

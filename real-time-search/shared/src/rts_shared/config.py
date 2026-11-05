@@ -35,6 +35,9 @@ def load_config(path: str) -> dict:
     for surface in ("qac", "serp"):
         if cfg["app"]["timeouts_ms"][f"{surface}_l2"] >= cfg["budgets_ms"][f"{surface}_total_p95"]:
             raise ValueError(f"app.timeouts_ms.{surface}_l2 must be below budgets_ms.{surface}_total_p95")
+    for p in cfg["app"].get("demo_personas", []):
+        if p.get("category") not in cfg["data"]["categories"]:
+            raise ValueError(f"app.demo_personas: {p.get('name')} needs a category from data.categories")
     return cfg
 
 

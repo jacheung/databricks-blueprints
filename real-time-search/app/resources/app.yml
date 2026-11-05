@@ -31,6 +31,11 @@ resources:
           serving_endpoint:
             name: rts-qac-l2
             permission: CAN_QUERY
+        - name: serp-l2
+          description: SERP L2 reranker (DCNv2 on a T4, route-optimized)
+          serving_endpoint:
+            name: rts-serp-l2
+            permission: CAN_QUERY
         - name: serp-index
           description: SERP L1 hybrid index over products
           uc_securable:

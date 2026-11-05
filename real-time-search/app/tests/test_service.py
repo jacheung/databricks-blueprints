@@ -8,6 +8,7 @@ import pytest
 from rts_app.service import (index_query, latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search,
                              expected_session_features, freshness_breakdown, l2_inputs, landed, time_calls,
                              user_feature_values, with_timeout, RecentValues)
+from rts_app.service import persona_lift, ranked_top
 from rts_shared.events import EVENT_FIELDS
 
 TABLE = {
@@ -158,6 +159,43 @@ def test_search_skips_both_calls_for_blank_input():
     out = search("  ", embed=lambda t: pytest.fail("embedded"), query_index=lambda **kw: pytest.fail("searched"),
                  query_type="HYBRID", k=200, query_columns=[])
     assert out["l1"] == [] and out["embedding"] == "skipped"
+
+
+HITS4 = [{"product_id": f"B{i}", "title": t, "score": s}
+         for i, (t, s) in enumerate([("usb c cable", 0.9), ("usb hub", 0.8), ("usb c charger", 0.7), ("usb drive", 0.6)], 1)]
+
+
+def _search(rerank, n=10, hits=HITS4):
+    return search("usb", embed=lambda t: VEC, query_index=lambda **kw: hits, query_type="HYBRID", k=200,
+                  query_columns=["search_text"], rerank=rerank, n=n)
+
+
+def test_search_l2_reranks_every_hit_and_shows_the_top_n_of_both():
+    sent = []
+    out = _search(lambda hits: sent.append(hits) or [0.1, 0.2, 0.3, 0.9], n=2)
+    assert sent[0] == HITS4  # all L1 hits, in L1 order
+    assert out["hits"] == 4 and [h["product_id"] for h in out["l1"]] == ["B1", "B2"]
+    assert out["l2"]["status"] == "ok"
+    assert [(h["product_id"], h["l1_rank"]) for h in out["l2"]["items"]] == [("B4", 4), ("B3", 3)]  # UI badges
+    assert all("l1_rank" not in h for h in out["l1"])
+    assert set(out["timings_ms"]) == {"embed", "search", "l2"}
+
+
+def test_search_l2_timeout_and_error_fall_back_to_l1_without_items():
+    def slow(hits):
+        raise TimeoutError
+
+    def broken(hits):
+        raise RuntimeError("endpoint 503")
+
+    for rerank, status in [(slow, "timeout"), (broken, "error")]:
+        out = _search(rerank)
+        assert out["l2"] == {"status": status} and out["l1"] == HITS4 and "l2" in out["timings_ms"]
+
+
+def test_search_l2_is_not_called_without_hits():
+    out = _search(lambda hits: pytest.fail("called"), hits=[])
+    assert out["l2"] == {"status": "ok", "items": []}
 
 
 RANKED = {"ca": [{"rank": i, "completion": c} for i, c in enumerate(["camera", "camera bag", "cat food", "car seat"], 1)]}
@@ -369,3 +407,19 @@ def test_user_feature_values_drop_keys_and_list_categories_by_count():
     assert user_feature_values(rows) == [{"feature": "user_n_clicks_30d", "value": 8},
                                          {"feature": "user_cat_cnt_30d[Pet Supplies]", "value": 5},
                                          {"feature": "user_cat_cnt_30d[Toys]", "value": 1}]
+
+
+def test_ranked_top_orders_by_score_and_keeps_ties_in_l1_order():
+    items = [{"id": "a"}, {"id": "b"}, {"id": "c"}, {"id": "d"}]
+    assert [r["id"] for r in ranked_top(items, [0.1, 0.9, 0.9, 0.5], k=3)] == ["b", "c", "d"]
+
+
+def test_persona_lift_compares_category_share_in_the_top_results():
+    cat = {"category": "Electronics"}
+    other = {"category": "Books & Media"}
+    guest = [[cat, other, other, other], [other, other, other, other]]   # 1 of 8
+    persona = [[cat, cat, other, other], [cat, other, other, other]]     # 3 of 8
+    assert persona_lift(guest, persona, "Electronics", min_lift=2.0) == {"guest": 0.125, "persona": 0.375, "ok": True}
+    assert persona_lift(guest, guest, "Electronics", min_lift=2.0)["ok"] is False   # no lift
+    none = [[other], [other]]
+    assert persona_lift(none, none, "Electronics", min_lift=2.0)["ok"] is False      # 0 -> 0 is not a lift

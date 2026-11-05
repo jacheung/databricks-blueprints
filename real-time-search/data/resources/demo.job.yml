@@ -1,4 +1,5 @@
-# Demo scenarios for the app: starts of test-split sessions, synced to Lakebase. Run after clickstream_job.
+# Demo scenarios and personas for the app, synced to Lakebase. Run after clickstream_job (and again whenever it
+# refreshes the simulated history: personas are picked from the user features' latest values).
 resources:
   jobs:
     demo_job:
@@ -15,3 +16,7 @@ resources:
           environment_key: serverless
           notebook_task:
             notebook_path: ../notebooks/demo_scenarios.py
+        - task_key: demo_personas
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/demo_personas.py

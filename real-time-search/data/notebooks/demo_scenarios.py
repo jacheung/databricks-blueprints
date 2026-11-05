@@ -120,9 +120,9 @@ for i, r in enumerate(picked):
     t0 = evs[0]["event_time"]
     scenario_events = [{"offset_ms": int((e["event_time"] - t0).total_seconds() * 1000),
                         **{f: e[f] for f in SCENARIO_EVENT_FIELDS if f != "offset_ms"}} for e in evs]
-    who = "logged-in user" if r["user_id"] else "guest"
+    # No "(guest)" / "(logged-in user)": the app replays every scenario under whoever is signed in (demo_personas).
     rows.append({"scenario_id": f"sc{i + 1}", "user_id": r["user_id"],
-                 "label": f"{r['intent_brand']} {r['intent_category']} shopper, ~${r['intent_price_target']:.0f} ({who})",
+                 "label": f"{r['intent_brand']} {r['intent_category']} shopper, ~${r['intent_price_target']:.0f}",
                  "intent_category": r["intent_category"], "intent_brand": r["intent_brand"],
                  "intent_price_target": r["intent_price_target"], "next_query": r["next_query"],
                  "events": json.dumps(scenario_events)})

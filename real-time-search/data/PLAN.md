@@ -11,6 +11,11 @@ Update this file, plus this track's one status line in the top-level file, at th
   produced after the pipeline started. Fine for probes and live traffic; revisit before the app demo (step 4).
 - `preflight` records FAIL checks but doesn't assert, so `catalog_job` continues past a failed preflight.
 - The full ~97K-query catalog run is still blocked on `ai_classify` throughput (step 1).
+- **Batch features go stale as the simulated history ages** (see Gotchas). The last `clickstream_sim` run ended its
+  history on 2026-10-30. Item features (7 d) reach zero around 2026-11-06, and user features (30 d) around 2026-11-29.
+  Measured 2026-11-05: `user_n_clicks_30d` total 139.5K on 10-30 → 111.3K on 11-05 (−3.4%/day); items with
+  features 5,125 → 941 and 23,837 → 5,557 in the two item tables. After those dates the L2 rankers get no user or
+  item signal, and the demo's sign-in personas stop changing rankings.
 
 ## Gotchas
 - Feature deletes: delete materializations before the feature. For batch features, delete the offline one, which
@@ -20,6 +25,14 @@ Update this file, plus this track's one status line in the top-level file, at th
 - Freshness is measured server-side (`commit_time - event_time`, `is_timer = false`), within the 30-minute window.
 - A new streaming pipeline reads Kafka from the latest offset and its flows start minutes after creation. `feature_views` now
   waits for a readiness probe to land before measuring, and asserts that every probe landed and p95 < 1 s.
+- **Stale batch features.** The simulated history ends the day before the `clickstream_sim` run, but the user (30 d)
+  and item (7 d) `SlidingWindow`s slide with the calendar: the cron writes one row per day stamped with the window's
+  end. Each day after the sim run, 1/window of the history ages out, so personalization fades with no error anywhere.
+  If L2 rankings stop reacting to a signed-in user, or SERP L2 stops helping, check this first:
+  `SELECT DATE(event_time), COUNT(*), SUM(user_n_clicks_30d) FROM <rts_user_offline_* holding user_n_clicks_30d> GROUP BY 1 ORDER BY 1`
+  (the same per day for `rts_item_offline_*`). Totals falling day by day after the sim's `end_date` mean stale history.
+  Fix: rerun `clickstream_job` with fresh dates (`rebuild_data=true`, after `teardown_job` with `confirm=yes`), then the
+  demo scenarios and personas.
 
 ## Checklist
 

@@ -33,3 +33,34 @@ def replay(events: list[dict], session_id: str, user_id: str | None, now: dateti
                     **{f: e[f] for f in ("event_type", "query_id", "query", "product_id", "category", "brand",
                                          "price", "device")}})
     return out
+
+
+# Personas: the users the demo signs in as, decoupled from the replayed clickstream. Each configured persona
+# (`app.demo_personas`: name + category) gets the simulated user most concentrated in that category in the user
+# features' latest values. User history drives the L2 lift through category share (step 0, 2026-11-05: median price
+# barely moved the rankings), so personas differ by category.
+PERSONA_COLUMNS = ("persona_id", "name", "user_id", "category", "category_share", "category_events_30d",
+                   "n_clicks_30d", "median_price_30d", "features_as_of")
+
+
+def pick_personas(wanted: list[dict], category_rows: list[tuple], users: dict[str, dict], min_events: int) -> list[dict]:
+    """`category_rows`: (user_id, category, user_cat_cnt_30d); `users`: user_id -> user_n_clicks_30d and
+    user_median_price_30d. Per persona: among users with `min_events`+ events in the persona's category, the highest
+    share of their history in it, then the most events, then user_id; a user is used once."""
+    totals, counts = {}, {}
+    for user_id, category, n in category_rows:
+        totals[user_id] = totals.get(user_id, 0) + n
+        counts[(user_id, category)] = n
+    picks, used = [], set()
+    for i, p in enumerate(wanted, start=1):
+        pool = [(n / totals[u], n, u) for (u, c), n in counts.items()
+                if c == p["category"] and n >= min_events and u not in used and u in users]
+        if not pool:
+            raise ValueError(f"no user with {min_events}+ events of history in {p['category']} for {p['name']}")
+        share, n, user_id = min(pool, key=lambda t: (-t[0], -t[1], t[2]))
+        used.add(user_id)
+        picks.append({"persona_id": f"p{i}", "name": p["name"], "user_id": user_id, "category": p["category"],
+                      "category_share": round(share, 3), "category_events_30d": n,
+                      "n_clicks_30d": users[user_id]["user_n_clicks_30d"],
+                      "median_price_30d": users[user_id]["user_median_price_30d"]})
+    return picks
