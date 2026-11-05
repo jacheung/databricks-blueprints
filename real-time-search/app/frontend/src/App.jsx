@@ -254,7 +254,7 @@ function UnderTheHood({ session, result, freshness, e2e, serpE2e, serpBudget,
         {session && (
           <p className="session">
             Replayed {session.events} events to Kafka as <code>{session.session_id}</code>
-            {session.user_id ? ` (user ${session.user_id})` : " (guest)"}. Try{" "}
+            {session.user_id ? ` (signed in, user ${session.user_id})` : " (guest)"}. Try{" "}
             <button className="link" onClick={onTry}>
               “{session.next_query}”
             </button>
@@ -344,7 +344,7 @@ function shortValue(feature, v) {
 
 // Rows per source: [feature, value, when the app read it]. Session and user values are the app's own Lakebase reads
 // of the tables the endpoint looks up; request values are exactly what was sent for the top completion.
-function inputRows(inputs, { freshness, userFeatures, top, session }) {
+function inputRows(inputs, { freshness, userFeatures, top, session, userId }) {
   const ready = freshness?.status === "ready";
   return {
     stream: ready
@@ -353,16 +353,16 @@ function inputRows(inputs, { freshness, userFeatures, top, session }) {
     batch: (userFeatures ?? inputs.batch.map((f) => ({ feature: f, value: null }))).map((x) => [x.feature, x.value, "hourly batch"]),
     request: inputs.request.map((f) => [
       f,
-      !top ? null : f === "l1_rank" ? top.rank : f === "is_guest" ? Number(!session?.user_id) : top[f],
+      !top ? null : f === "l1_rank" ? top.rank : f === "is_guest" ? Number(!userId) : top[f],
       "in request",
     ]),
   };
 }
 
-function FeatureBar({ inputs, freshness, userFeatures, top, session }) {
+function FeatureBar({ inputs, freshness, userFeatures, top, session, userId }) {
   if (!inputs) return null;
-  const rows = inputRows(inputs, { freshness, userFeatures, top, session });
-  const guest = session && !session.user_id;
+  const rows = inputRows(inputs, { freshness, userFeatures, top, session, userId });
+  const guest = !userId;
   return (
     <span className="fbar">
       {SOURCES.map(([key, label, path]) => {
@@ -394,7 +394,7 @@ function FeatureBar({ inputs, freshness, userFeatures, top, session }) {
   );
 }
 
-// A logged-in session's batch features, read once per Play (they only change hourly).
+// The signed-in user's batch features, read once per sign-in (they only change hourly).
 function useUserFeatures(userId) {
   const [features, setFeatures] = useState(null);
   useEffect(() => {
@@ -405,6 +405,48 @@ function useUserFeatures(userId) {
       .then((res) => res && setFeatures(res.features));
   }, [userId]);
   return features;
+}
+
+// Store-style account menu: sign in as one of data's demo personas, or continue as a guest. Who you are is the sign-in
+// (long-term user features); what you just did is the replayed clickstream (session features). They combine freely.
+function Avatar({ name }) {
+  return <span className="avatar" aria-hidden>{name.split(" ").map((w) => w[0]).join("")}</span>;
+}
+
+function SignIn({ personas, me, onPick }) {
+  const [open, setOpen] = useState(false);
+  const choose = (p) => {
+    onPick(p);
+    setOpen(false);
+  };
+  return (
+    <div className="signin" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}
+      onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
+      <button className="signin-button" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
+        {me ? <><Avatar name={me.name} />Hi, {me.name.split(" ")[0]} ▾</> : "Sign in"}
+      </button>
+      {open && (
+        <div className="signin-menu" role="dialog" aria-label="Sign in">
+          <p className="signin-title">{me ? "Switch account" : "Sign in to Brick Lane Goods"}</p>
+          {personas.map((p) => (
+            <button key={p.persona_id} className="persona" aria-pressed={me?.persona_id === p.persona_id}
+              onClick={() => choose(p)}>
+              <Avatar name={p.name} />
+              <span>
+                <strong>{p.name}</strong>
+                <span className="persona-meta">
+                  Shops {p.category} · {p.category_events_30d} events in 30 days · ~${Math.round(p.median_price_30d)}
+                </span>
+              </span>
+            </button>
+          ))}
+          <button className="link guest" onClick={() => choose(null)}>
+            {me ? "Sign out and continue as guest" : "Continue as guest"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Retail autocomplete style: the typed prefix stays plain and the rest of the completion is bold.
@@ -585,6 +627,9 @@ export default function App() {
   const [scenarios, setScenarios] = useState([]);
   const [scenarioId, setScenarioId] = useState("");
   const [session, setSession] = useState(null);
+  const [personas, setPersonas] = useState([]);
+  const [me, setMe] = useState(null); // the signed-in persona; null is a guest
+  const userId = me?.user_id ?? null;
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState(null);
   const [q, setQ] = useState("");
@@ -610,6 +655,7 @@ export default function App() {
         if (s.length) setScenarioId(s[0].scenario_id);
       })
       .catch(() => setError("Could not load scenarios"));
+    fetch("/api/personas").then((r) => (r.ok ? r.json() : [])).then(setPersonas);
   }, []);
 
   useEffect(() => {
@@ -620,7 +666,7 @@ export default function App() {
       const sent = performance.now();
       const params = new URLSearchParams({ q });
       if (session) params.set("session_id", session.session_id);
-      if (session?.user_id) params.set("user_id", session.user_id);
+      if (userId) params.set("user_id", userId);
       fetch(`/api/qac?${params}`)
         .then((r) => r.json())
         .then((res) => {
@@ -629,13 +675,14 @@ export default function App() {
         });
     }, cfg.qac_debounce_ms);
     return () => clearTimeout(t);
-  }, [q, session, cfg.qac_debounce_ms]);
+  }, [q, session, userId, cfg.qac_debounce_ms]);
 
   async function play() {
     setPlaying(true);
     setError(null);
     try {
-      const r = await fetch(`/api/scenarios/${scenarioId}/play`, { method: "POST" });
+      const who = userId ? `?${new URLSearchParams({ user_id: userId })}` : ""; // replayed as whoever is signed in
+      const r = await fetch(`/api/scenarios/${scenarioId}/play${who}`, { method: "POST" });
       if (!r.ok) throw new Error(await r.text());
       setSession(await r.json());
     } catch (e) {
@@ -680,7 +727,7 @@ export default function App() {
   }, [serp]);
 
   const freshness = useFreshness(session);
-  const userFeatures = useUserFeatures(session?.user_id);
+  const userFeatures = useUserFeatures(userId);
   const l1 = result?.l1 ?? [];
   const l2 = result?.l2 ?? { status: "not_deployed" };
   const l2Items = l2.items ?? l1;
@@ -692,7 +739,7 @@ export default function App() {
     const seq = ++latestSearch.current;
     const params = new URLSearchParams({ q: text });
     if (session) params.set("session_id", session.session_id);
-    if (session?.user_id) params.set("user_id", session.user_id);
+    if (userId) params.set("user_id", userId);
     setSearching(true);
     setError(null);
     const sent = performance.now(); // no debounce: the search starts on the Enter or pick itself
@@ -702,6 +749,17 @@ export default function App() {
       .catch((e) => seq === latestSearch.current && setError(`Search failed: ${e.message}`))
       .finally(() => seq === latestSearch.current && setSearching(false));
   }
+
+  // Signing in or out re-runs the current search, as a store's reload after login would (QAC refetches on its own:
+  // userId is in its effect). Neither is a keystroke, so neither is timed.
+  const signedInOnce = useRef(false);
+  useEffect(() => {
+    if (!signedInOnce.current) {
+      signedInOnce.current = true;
+      return;
+    }
+    if (serp) runSearch(serp.query);
+  }, [userId]);
 
   // Picking a completion fills the box, closes the dropdown and searches (it isn't a keystroke, so it isn't timed).
   function pick(completion) {
@@ -762,6 +820,7 @@ export default function App() {
           onPlay={play} playing={playing} onTry={onTry} />
       </aside>
       <main>
+        <SignIn personas={personas} me={me} onPick={setMe} />
         <h1 className="store">
           <a href="/" onClick={goHome}>
             <img src="/logo.svg" alt="" />
@@ -801,7 +860,7 @@ export default function App() {
                     <>
                       L1 + L2: with features from{" "}
                       <FeatureBar inputs={cfg.l2_inputs} freshness={freshness} userFeatures={userFeatures}
-                        top={l2Items[0]} session={session} />
+                        top={l2Items[0]} session={session} userId={userId} />
                     </>
                   }
                   items={l2Items}

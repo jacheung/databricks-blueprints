@@ -21,6 +21,25 @@ main { max-width: 1024px; min-height: calc(100vh - 4rem); margin: 2rem auto; pad
   background: var(--white); border: 1px solid var(--gray-lines); border-radius: 12px;
   box-shadow: 0 1px 2px rgb(27 49 57 / 6%), 0 8px 28px rgb(27 49 57 / 8%); }
 @media (max-width: 1056px) { main { margin: 1rem; padding: 0 1rem 1rem; min-height: calc(100vh - 2rem); } }
+/* Sign in: a store-style account menu at the card's top right */
+main { position: relative; }
+.signin { position: absolute; top: 1rem; right: 1.25rem; z-index: 25; }
+.signin-button { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--navy-800); background: var(--white);
+  border: 1px solid var(--gray-lines); border-radius: 999px; padding: 0.35rem 0.9rem; font-weight: 600; }
+.signin-button:hover:not(:disabled) { background: var(--oat-medium); }
+.signin-button .avatar { width: 1.5rem; height: 1.5rem; font-size: 0.65rem; margin-left: -0.5rem; }
+.avatar { display: inline-grid; place-items: center; flex: none; width: 2.2rem; height: 2.2rem; border-radius: 50%;
+  color: var(--white); background: var(--lava-700); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.02em; }
+.signin-menu { position: absolute; top: calc(100% + 6px); right: 0; width: 21rem; padding: 0.6rem;
+  background: var(--white); border: 1px solid var(--gray-lines); border-radius: 10px; box-shadow: 0 8px 24px rgb(27 49 57 / 16%); }
+.signin-title { margin: 0.2rem 0.4rem 0.5rem; font-size: 0.85rem; font-weight: 600; }
+.persona { display: flex; align-items: center; gap: 0.7rem; width: 100%; padding: 0.5rem 0.45rem; text-align: left;
+  color: var(--navy-800); background: none; border-radius: 6px; font-weight: 400; }
+.persona:hover:not(:disabled) { background: var(--oat-medium); }
+.persona[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--lava-600); }
+.persona strong, .persona-meta { display: block; }
+.persona-meta { font-size: 0.75rem; color: var(--gray-text); }
+.signin-menu .guest { display: block; margin: 0.5rem 0.45rem 0.2rem; font-size: 0.85rem; }
 /* Under the hood: a drawer on the left edge; the tab at its top right slides it out and back */
 .drawer { position: fixed; left: 0; top: 1rem; z-index: 30; width: min(22rem, calc(100vw - 3rem));
   padding-left: 1rem; box-sizing: border-box; transition: transform 250ms ease-out; }

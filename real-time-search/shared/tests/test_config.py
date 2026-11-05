@@ -156,3 +156,11 @@ def test_serp_l2_lightgbm_comparator_serves_on_cpu(cfg):
     lgbm = cfg["models"]["serp_l2"]["lgbm"]
     assert lgbm["workload_type"] == "CPU" and lgbm["endpoint"] != cfg["models"]["serp_l2"]["endpoint"]
     assert lgbm["registered_name"] != cfg["models"]["serp_l2"]["registered_name"]
+
+
+def test_demo_personas_name_a_known_category(tmp_path, cfg):
+    assert [p["name"] for p in cfg["app"]["demo_personas"]] == ["Ali Ghodsi", "Reynold Xin", "Matei Zaharia"]
+    bad = copy.deepcopy(cfg)
+    bad["app"]["demo_personas"][0]["category"] = "Spaceships"
+    with pytest.raises(ValueError, match="demo_personas"):
+        load_config(write(tmp_path, bad))
