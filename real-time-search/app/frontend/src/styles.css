@@ -15,11 +15,18 @@
   color: var(--navy-800);
   background: var(--oat-light);
 }
-main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+/* The storefront: one white card on the oat page, so the search bar, dropdown and results have a frame to live in.
+   Content stays 960px wide; min-height keeps the frame page-sized before the first search. */
+main { max-width: 1024px; min-height: calc(100vh - 4rem); margin: 2rem auto; padding: 0 2rem 2rem; box-sizing: border-box;
+  background: var(--white); border: 1px solid var(--gray-lines); border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(27 49 57 / 6%), 0 8px 28px rgb(27 49 57 / 8%); }
+@media (max-width: 1056px) { main { margin: 1rem; padding: 0 1rem 1rem; min-height: calc(100vh - 2rem); } }
 /* Under the hood: a drawer on the left edge; the tab at its top right slides it out and back */
 .drawer { position: fixed; left: 0; top: 1rem; z-index: 30; width: min(22rem, calc(100vw - 3rem));
   padding-left: 1rem; box-sizing: border-box; transition: transform 250ms ease-out; }
 .drawer.closed { transform: translateX(-100%); }
+.page { transition: padding-left 250ms ease-out; }
+@media (min-width: 1440px) { .page.hood-open { padding-left: calc(min(22rem, 100vw - 3rem) + 1.6rem); } }  /* room beside the card */
 .drawer .hood { max-height: calc(100vh - 2rem); overflow-y: auto; margin: 0; box-sizing: border-box;
   box-shadow: 0 6px 20px rgb(27 49 57 / 10%); transition: visibility 0s; }
 .drawer.closed .hood { visibility: hidden; transition: visibility 0s 250ms; }  /* hidden once slid away: no tabbing into it */
