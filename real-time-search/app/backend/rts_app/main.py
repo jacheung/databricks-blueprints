@@ -31,7 +31,7 @@ from psycopg_pool import ConnectionPool
 from rts_app.service import (latency_stats, play_scenario, qac, rows_to_dicts, scenario_timeline, search,
                              expected_session_features, freshness_breakdown, l2_inputs, landed, time_calls,
                              user_feature_values, with_timeout, RecentValues, SESSION_TABLES, persona_lift, ranked_top,
-                             trending)
+                             trending, index_query)
 from rts_shared.config import full_name, load_config
 from rts_shared.kafka import producer as kafka_producer
 from rts_shared.lakebase import branch, features_database

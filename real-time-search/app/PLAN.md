@@ -220,4 +220,7 @@ Static (L1) and Session-aware (L1 + L2). Only the click sequence is pre-baked; f
   endpoints need the app SP's OAuth token, which notebook runtime auth can't give) and asserts a 2x category-share lift
 - [x] UI: Sign in at the card's top right (3 personas + Continue as guest); the sign-in drives QAC, search, Play and the
   L2 inputs bar's batch segment; signing in or out re-runs the current search (as a store's reload after login would)
-- [ ] Browser check and `/api/checks/personas` all `ok`
+- [ ] Browser check and `/api/checks/personas` all `ok`. `/api/checks/personas` all `ok` (2026-11-06, after fixing a
+  missing `index_query` import that 500'd it since `b41e4ac`): category share guest → persona, QAC top 5 / SERP top 10:
+  Ali 0.031 → 0.129 / 0.0 → 0.283, Reynold 0.024 → 0.102 / 0.017 → 0.117, Matei (`u012120`) 0.122 → 0.518 /
+  0.017 → 0.225. Browser check still pending.
