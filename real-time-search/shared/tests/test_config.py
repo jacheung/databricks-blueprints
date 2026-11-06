@@ -111,6 +111,28 @@ def test_sim_dates_end_yesterday_relative_to_the_run(cfg):
     assert sim["history_days"] == 45 and sim["test_days"] == 14
 
 
+def test_shift_days_moves_the_history_to_end_yesterday(cfg):
+    from datetime import date
+    from rts_shared.config import shift_days
+    # simulated on 2026-10-30 (history 09-15 .. 10-29); on 11-06 the history should start 09-22
+    assert shift_days(cfg, first_event_date=date(2026, 9, 15), today=date(2026, 11, 6)) == 7
+    assert shift_days(cfg, first_event_date=date(2026, 9, 22), today=date(2026, 11, 6)) == 0   # already current
+
+
+def test_shift_days_never_moves_history_backwards(cfg):
+    from datetime import date
+    from rts_shared.config import shift_days
+    with pytest.raises(ValueError, match="ahead"):
+        shift_days(cfg, first_event_date=date(2026, 9, 30), today=date(2026, 11, 6))
+
+
+def test_window_strength_compares_the_latest_window_with_the_best_day():
+    from datetime import date
+    from rts_shared.config import window_strength
+    daily = [(date(2026, 11, 4), 100.0), (date(2026, 11, 6), 90.0), (date(2026, 11, 5), 120.0)]  # any order
+    assert window_strength(daily) == {"latest_date": "2026-11-06", "latest": 90, "best": 120, "ratio": 0.75}
+
+
 def test_test_days_must_leave_training_history(tmp_path, cfg):
     bad = copy.deepcopy(cfg)
     bad["data"]["sim"]["test_days"] = bad["data"]["sim"]["history_days"]

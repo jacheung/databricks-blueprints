@@ -14,7 +14,9 @@ def ensure_endpoint(w, name: str, entity, route_optimized: bool) -> str:
                                    route_optimized=route_optimized)
         return "created"
     served = w.serving_endpoints.get(name).config.served_entities or []
-    if [(s.entity_name, s.entity_version) for s in served] == [(entity.entity_name, entity.entity_version)]:
+    # scale_to_zero too: e2-demo-fe's cleanup bot turns it on overnight, and cold starts time L2 out.
+    key = lambda s: (s.entity_name, s.entity_version, bool(s.scale_to_zero_enabled))  # noqa: E731
+    if [key(s) for s in served] == [key(entity)]:
         return "unchanged"
     w.serving_endpoints.update_config(name=name, served_entities=[entity])
     return "updated"
