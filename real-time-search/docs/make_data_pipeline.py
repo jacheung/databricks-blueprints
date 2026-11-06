@@ -32,11 +32,10 @@ ICONS = {  # name -> (file, width / height)
     "feature_store": ("primary-icon-orange-feature-store.svg", 1.0),
 }
 
-FLOWS = {  # brand palette: Navy 500, Lava 500, Blue 500, Yellow 600
+FLOWS = {  # brand palette: Navy 500, Lava 500, Blue 500
     "batch": ("#618794", "batch (Delta tables)"),
     "stream": ("#FF3621", "streaming (Kafka, Real-Time Mode)"),
     "online": ("#4299E0", "into the stores the app reads"),
-    "ml": ("#FFAB00", "L1 retrieval stores (ml track)"),
 }
 
 font = instancer.instantiateVariableFont(TTFont(HERE / "fonts" / "DMSans-VariableFont.ttf"),
@@ -111,126 +110,97 @@ def panel(x, y, w, h, name, subtitle, tint="#FFFFFF", stroke="#C9D3D8"):
         sub(x + 20, y + 49, subtitle, anchor="start")
 
 
-W, H = 1400, 880
+W, H = 1400, 840
 HEAD = 4  # arrowheads end this far before a box edge
-TOP, BOTTOM = 96, 626  # the top row of panels
-LOW = 656  # the bottom row of panels
+TOP, BOTTOM = 96, 780  # the panels
+# panel x, width; nodes sit 15 px inside; the buses run in the gaps between panels
+P1, P2, P3, P4, P5 = (20, 240), (300, 250), (585, 270), (890, 250), (1180, 200)
+BUS1, BUS2, BUS3, BUS4 = 272, 567, 872, 1160
+
+
+def col(p):
+    return p[0] + 15, p[1] - 30
+
 
 # --- Header --------------------------------------------------------------------------------------------------------
-title(30, 38, "Data pipeline: pinned source data → the stores the app reads", anchor="start", size=20)
-sub(30, 62, "data bundle jobs, in order: catalog_job → clickstream_job → demo_job (before each demo). "
-            "The ml track builds the L1 retrieval stores from the same tables.", anchor="start")
+title(30, 38, "Data pipeline: your search data → the stores the app reads", anchor="start", size=20)
+sub(30, 62, "Batch features refresh hourly, session features in under a second, and the app's own events stream "
+            "back in.", anchor="start")
 
-# --- 1. Source data ------------------------------------------------------------------------------------------------
-panel(30, TOP, 240, BOTTOM - TOP, "SOURCE DATA", "pinned in the repo", "#FFF6F3", "#FFC9BE")
-esci = node(None, "Amazon ESCI", 50, 166, 200, "queries · products · labels", "esci-data @ 1ebba06 · sha256")
-snap = node(None, "Category snapshot", 50, 306, 200, "ai_classify answers", "data/snapshots · 149 KB")
-seed = node(None, "Config + seed", 50, 446, 200, "20 categories · prices", "simulator seed 42")
-sub(150, 566, "same bytes on every rebuild;")
-sub(150, 583, "ai_classify only labels rows")
-sub(150, 600, "missing from the snapshot")
+# --- 1. Your data --------------------------------------------------------------------------------------------------
+panel(P1[0], TOP, P1[1], BOTTOM - TOP, "YOUR DATA", "what you bring", "#FFF6F3", "#FFC9BE")
+x, w = col(P1)
+catalog = node(None, "Product catalog", x, 161.5, w, "SKUs · titles · attributes", "brands · prices")
+logs = node(None, "Search logs", x, 390, w, "queries · impressions", "clicks · relevance labels")
+clicks = node(None, "Clickstream", x, 605, w, "searches · clicks · carts", "web + app sessions")
+sub(P1[0] + P1[1] / 2, 732, "in this blueprint: Amazon ESCI")
+sub(P1[0] + P1[1] / 2, 749, "+ simulated sessions")
 
-# --- 2. Catalog ----------------------------------------------------------------------------------------------------
-panel(320, TOP, 240, BOTTOM - TOP, "CATALOG", "catalog_job · catalog_prep")
-labels = node("delta", "esci_labels", 340, 166, 200, "(query, product) judgements", "E / S / C / I + gain")
-queries = node("delta", "queries", 340, 306, 200, "10K queries", "+ category")
-products = node("delta", "products", 340, 446, 200, "170K judged products", "+ category · synthetic price")
+# --- 2. Lakehouse --------------------------------------------------------------------------------------------------
+panel(P2[0], TOP, P2[1], BOTTOM - TOP, "LAKEHOUSE", "Delta tables · Kafka topic")
+x, w = col(P2)
+classify = node(None, "ai_classify", x, 170, w, "LLM-enriched categories")
+products = node("delta", "Products", x, 260, w, "products", "+ category · price")
+slogs = node("delta", "Search logs", x, 390, w, "queries · esci_labels", "qac / serp_impressions")
+events = node("delta", "Session events", x, 540, w, "session_events", "behavior history")
+kafka = node("kafka", "Apache Kafka", x, 670, w, "events topic", "site + app clicks")
 
-BUS = 293  # sources -> catalog
-arrow(f"M250 {esci[2]} H{340 - HEAD}", "batch")
-arrow(f"M{BUS} {esci[2]} V{queries[2]} H{340 - HEAD}", "batch")
-arrow(f"M{BUS} {queries[2]} V{products[2]} H{340 - HEAD}", "batch")
-arrow(f"M250 {snap[2]} H{BUS}", "batch", head=False)
-arrow(f"M250 {seed[2]} H{BUS}", "batch", head=False)
+arrow(f"M{catalog[4]} {catalog[2]} H{x - HEAD}", "batch")
+arrow(f"M{x + w / 2} {classify[1]} V{products[0] - HEAD}", "batch")
+arrow(f"M{catalog[4]} {logs[2]} H{x - HEAD}", "batch")
+arrow(f"M{catalog[4]} {clicks[2] - 8} H{BUS1 - 6} V{events[2]} H{x - HEAD}", "batch")
+arrow(f"M{catalog[4]} {clicks[2] + 8} H{BUS1 + 6} V{kafka[2]} H{x - HEAD}", "stream")
 
-# --- 3. Clickstream + features -------------------------------------------------------------------------------------
-CX, CW = 610, 425  # panel
-LX, LW = 625, 190  # left column: the simulator's tables
-RX, RW = 845, 175  # right column: Kafka and the Feature Views
-panel(CX, TOP, CW, BOTTOM - TOP, "CLICKSTREAM + FEATURES", "clickstream_job")
-events = node("delta", "session_events", LX, 166, LW, "~1M simulated events", "45 days · CDF on")
-sessions = node("delta", "sim_sessions", LX, 286, LW, "planted intent per session")
-qac_imp = node("delta", "qac_impressions", LX, 391, LW, "one row per search")
-serp_imp = node("delta", "serp_impressions", LX, 496, LW, "judged products shown")
-kafka = node("kafka", "Apache Kafka", RX, 166, RW, "events topic")
-ingest = node("delta", "events_ingest", RX, 261, RW, "topic copy for training")
-rtm = node("rtm", "Real-Time Mode", RX, 356, RW, "12 session features", "< 1 s to Lakebase", accent=True)
-fstore = node("feature_store", "Feature Store", RX, 466, RW, "user 30 d · item 7 d", "hourly batch windows")
+# --- 3. Features + retrieval ---------------------------------------------------------------------------------------
+panel(P3[0], TOP, P3[1], BOTTOM - TOP, "FEATURES + RETRIEVAL", "batch + Real-Time Mode")
+x, w = col(P3)
+search_src = node("delta", "Search index source", x, 260, w, "products_search", "synced to AI Search")
+prefix = node("delta", "Prefix completions", x, 390, w, "qac_prefix_completions", "popularity · CTR per prefix")
+fstore = node("feature_store", "Feature Store", x, 540, w, "user 30 d · item 7 d · hourly",
+              "offline tables for training")
+rtm = node("rtm", "Real-Time Mode", x, 670, w, "12 session features", "Kafka → Lakebase in < 1 s")
 
-SIM_BUS = 585  # catalog -> clickstream_sim
-arrow(f"M540 {queries[2]} H{SIM_BUS} V{events[0] + 18} H{LX - HEAD}", "batch")
-arrow(f"M540 {labels[2]} H{SIM_BUS}", "batch", head=False)
-arrow(f"M540 {products[2]} H{SIM_BUS} V{queries[2]}", "batch", head=False)
-label(SIM_BUS, 158, "clickstream_sim")
-DERIVED = 617  # session_events -> the other simulator tables
-arrow(f"M{LX + 30} {events[1]} V{events[1] + 14} H{DERIVED} V{sessions[2]} H{LX - HEAD}", "batch")
-arrow(f"M{DERIVED} {sessions[2]} V{qac_imp[2]} H{LX - HEAD}", "batch")
-arrow(f"M{DERIVED} {qac_imp[2]} V{serp_imp[2]} H{LX - HEAD}", "batch")
-# events -> Kafka (replayed with their event times) -> ingestion copy and Real-Time Mode
-arrow(f"M{LX + LW} {kafka[2]} H{RX - HEAD}", "stream")
-label((LX + LW + RX) / 2, 158, "kafka_stream")
-arrow(f"M{RX + 50} {kafka[1]} V{ingest[0] - HEAD}", "stream")
-# around the ingestion copy, down the panel's right edge, into Real-Time Mode from above
-arrow(f"M{RX + RW} {kafka[2] - 8} H{RX + RW + 8} V{rtm[0] - 14} H{RX + RW - 30} V{rtm[0] - HEAD}", "stream")
-# Delta events -> the batch user / item features
-arrow(f"M{LX + LW} {events[1] - 18} H{(LX + LW + RX) / 2} V{fstore[2]} H{RX - HEAD}", "batch")
-label(RX + RW - 4, BOTTOM - 14, "feature_views", anchor="end")
+arrow(f"M{products[4]} {products[2]} H{x - HEAD}", "batch")
+arrow(f"M{products[4]} {products[2] + 18} H{BUS2} V{prefix[2]}", "batch", head=False)
+arrow(f"M{slogs[4]} {slogs[2]} H{x - HEAD}", "batch")
+arrow(f"M{events[4]} {events[2]} H{x - HEAD}", "batch")
+arrow(f"M{kafka[4]} {kafka[2]} H{x - HEAD}", "stream")
 
-# --- 4. What the app reads -----------------------------------------------------------------------------------------
-AX, AW = 1085, 290
-NX, NW = AX + 18, AW - 36
-panel(AX, TOP, AW, BOTTOM - TOP, "WHAT THE APP READS", "online stores, read per request", "#F4F7F9")
-online = node("lakebase", "Lakebase", NX, 166, NW, "online features: session,", "user and item (L2 lookups)",
-              accent=True)
-demo_store = node("lakebase", "Lakebase", NX, 276, NW, "demo scenarios + personas", "synced tables")
-prefix_store = node("lakebase", "Lakebase", NX, 386, NW, "QAC prefix completions", "synced table · QAC L1")
-index = node("lakebase", "AI Search", NX, 496, NW, "products_hybrid_idx", "hybrid search · SERP L1")
+# --- 4. Online stores ----------------------------------------------------------------------------------------------
+panel(P4[0], TOP, P4[1], BOTTOM - TOP, "ONLINE STORES", "read per request", "#F4F7F9")
+x, w = col(P4)
+index = node("lakebase", "AI Search", x, 260, w, "hybrid product index", "SERP retrieval (L1)")
+prefix_store = node("lakebase", "Lakebase", x, 390, w, "prefix completions", "QAC retrieval (L1)")
+online = node("lakebase", "Lakebase", x, 605, w, "online features", "session · user · item (L2)")
 
-FEAT_BUS, DEMO_BUS, ML_BUS = 1048, 1060, 1072  # the gap between panels 3 and 4
-arrow(f"M{RX + RW} {rtm[2]} H{FEAT_BUS} V{online[2]} H{NX - HEAD}", "online")
-arrow(f"M{RX + RW} {fstore[2]} H{FEAT_BUS} V{rtm[2]}", "online", head=False)
+arrow(f"M{search_src[4]} {search_src[2]} H{x - HEAD}", "online")
+arrow(f"M{prefix[4]} {prefix[2]} H{x - HEAD}", "online")
+arrow(f"M{fstore[4]} {fstore[2]} H{BUS3 - 8} V{online[2] - 8} H{x - HEAD}", "online")
+arrow(f"M{rtm[4]} {rtm[2]} H{BUS3 + 8} V{online[2] + 8} H{x - HEAD}", "stream")
 
-# --- 5. L1 retrieval (ml track), below the catalog ------------------------------------------------------------------
-panel(320, LOW, 240, H - 20 - LOW, "L1 RETRIEVAL", "ml track · retrieval_job")
-prefix = node(None, "qac_prefix_completions", 335, 722, 210, "popularity · CTR per prefix", dashed=True)
-search = node(None, "products_search", 335, 797, 210, "index source · CDF on", dashed=True)
-arrow(f"M{products[3] + 175} {products[1]} V{prefix[0] - HEAD}", "ml")  # products -> both (clear of the heading)
-arrow(f"M{products[3] + 12} {products[1]} V{products[1] + 20} H{328} V{search[2]} H{335 - HEAD}", "ml")
-IMP_X = 575  # impressions -> prefix completions
-arrow(f"M{LX + 80} {serp_imp[1]} V{BOTTOM + 8} H{IMP_X} V{prefix[0] + 18} H{545 + HEAD + 2}", "ml")
-OUT_Y = BOTTOM + 16  # L1 stores -> the app's stores, above the bottom panels
-arrow(f"M545 {prefix[2] + 10} H{597} V{OUT_Y} H{ML_BUS} V{prefix_store[2]} H{NX - HEAD}", "ml")
-arrow(f"M{ML_BUS} {prefix_store[2]} V{index[2]} H{NX - HEAD}", "ml")
-arrow(f"M545 {search[2]} H{597} V{prefix[2] + 10}", "ml", head=False)
+# --- 5. Search app -------------------------------------------------------------------------------------------------
+panel(P5[0], TOP, P5[1], BOTTOM - TOP, "SEARCH APP", "Databricks Apps")
+x, w = col(P5)
+app = node("apps", "Search app", x, 420, w, "QAC as you type", "SERP on search")
+arrow(f"M{index[4]} {index[2]} H{BUS4} V{app[2]} H{x - HEAD}", "online")
+arrow(f"M{prefix_store[4]} {prefix_store[2]} H{BUS4}", "online", head=False)
+arrow(f"M{online[4]} {online[2]} H{BUS4} V{app[2]}", "online", head=False)
+sub(x + w / 2, app[1] + 24, "reads per keystroke")
+sub(x + w / 2, app[1] + 41, "and per search")
 
-# --- 6. Demo, below the clickstream --------------------------------------------------------------------------------
-panel(CX, LOW, CW, H - 20 - LOW, "DEMO", "demo_job · before each demo")
-shift = node(None, "time_shift", LX + 10, 730, 150, "events end yesterday", "+ reruns user / item")
-personas = node("delta", "demo_personas", RX - 35, 722, RW + 35, "from user features")
-scenarios = node("delta", "demo_scenarios", RX - 35, 797, RW + 35, "replayable sessions")
-SHIFT_X = 600  # time_shift moves session_events forward (in place)
-arrow(f"M{LX + 10} {shift[2]} H{SHIFT_X} V{events[0] + 52} H{LX - HEAD}", "batch")
-arrow(f"M{fstore[3] + 60} {fstore[1]} V{personas[0] - HEAD}", "batch")  # latest user features -> personas
-arrow(f"M{DERIVED} {serp_imp[2]} V{scenarios[2]} H{RX - 35 - HEAD}", "batch")  # sessions + events -> scenarios
-arrow(f"M{RX + RW} {scenarios[2]} H{DEMO_BUS} V{demo_store[2]} H{NX - HEAD}", "online")
-arrow(f"M{RX + RW} {personas[2]} H{DEMO_BUS}", "online", head=False)
+# the app's own events go back into the same topic: the loop that keeps session features live
+LOOP_Y = BOTTOM + 22
+arrow(f"M{x + w} {app[2]} H{W - 8} V{LOOP_Y} H{kafka[3] + 110} V{kafka[1] + HEAD}",
+      "stream")
+label(P4[0] + P4[1] / 2, LOOP_Y + 18, "live searches and clicks stream back in")
 
-# --- 7. App + legend -----------------------------------------------------------------------------------------------
-app = node("apps", "Apps", AX + 18, 716, AW - 36, "rts-search · QAC + SERP", "replays scenarios as Play")
-arrow(f"M{AX + AW / 2} {BOTTOM} V{app[0] - HEAD}", "online")
-label(AX + AW / 2 - 8, LOW + 40, "reads per keystroke / search", anchor="end")
-# the app's own events go to the same topic (live clicks, replayed scenarios)
-arrow(f"M{AX + AW - 18} {app[2]} H{W - 10} V80 H{RX + RW - 20} V{kafka[0] - HEAD}", "stream")
-label(W - 16, 92, "live events · Play", anchor="end")
-
-box(30, LOW, 240, H - 20 - LOW, rx=14, stroke="#C9D3D8")
-title(50, LOW + 30, "LEGEND", LAVA, "start")
+# --- Legend (top right, stacked as in make_architecture.py) -------------------------------------------------------
+LEGEND_X = W - 20 - 48 - max(title_width(text, 14) for _, text in FLOWS.values())
 for i, (flow, (color, text)) in enumerate(FLOWS.items()):
-    y = LOW + 62 + 26 * i
-    out.append(f'<path d="M50 {y - 4} H84" fill="none" stroke="{color}" stroke-width="3.5" stroke-dasharray="8 6"/>')
-    sub(94, y, text, NAVY, "start")
-box(50, LOW + 160, 34, 22, rx=5, stroke=LINE, dash=True)
-sub(94, LOW + 175, "owned by the ml track", NAVY, "start")
+    y = 34 + 19 * i
+    out.append(f'<path d="M{LEGEND_X:.0f} {y - 4.5} H{LEGEND_X + 38:.0f}" fill="none" stroke="{color}" '
+               f'stroke-width="3.5" stroke-dasharray="8 6"/>')
+    title(LEGEND_X + 50, y, text, anchor="start", size=14)
 
 # --- Font + write --------------------------------------------------------------------------------------------------
 opts = subset.Options()
