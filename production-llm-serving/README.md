@@ -1,10 +1,9 @@
 # Production LLM Serving
 
-Two workflows for sizing and comparing production model serving options on Databricks.
+Sizing and comparing production model serving options on Databricks.
 
 | Workflow | Use it to | Start here |
 | --- | --- | --- |
-| [Serving bench](serving-bench/) | Find which serving methods (provisioned throughput, pay-per-token, custom GPU) can serve a given open-source model, deploy the ones you choose, and benchmark throughput, latency, and latency after idle. Works by hand or with a coding agent. | Run discovery for your model, then the deploy and benchmark notebooks; or start a coding agent in the folder and say "benchmark \<model\>" ([AGENTS.md](serving-bench/AGENTS.md)). |
-| [LLM capacity planning](llm-capacity-planning/) | Profile token usage and latency, assess pay-per-token capacity, and size provisioned throughput with Unity Gateway fallback routing. | Follow the sizing guide and run [profile_workload.py](llm-capacity-planning/profile_workload.py). |
+| [Serving bench](serving-bench/) | Find which serving methods (provisioned throughput, pay-per-token, custom GPU) can serve a given open-source model, measure your request shape from sample prompts or traces, deploy the options you choose, and benchmark throughput, latency, and latency after idle at that shape. Works by hand or with a coding agent. | Run discovery for your model, optionally profile your requests, then the deploy and benchmark notebooks; or start a coding agent in the folder and say "benchmark \<model\>" ([AGENTS.md](serving-bench/AGENTS.md)). |
 
-Each workflow contains its own guide and runnable notebooks. See its README for configuration and execution instructions.
+See the [serving bench README](serving-bench/README.md) for configuration, execution, and serving the winner behind Unity Gateway with pay-per-token fallback.

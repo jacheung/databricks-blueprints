@@ -23,6 +23,7 @@ from common import (  # noqa: E402
     MAX_ERROR_RATE,
     endpoint_label,
     error_rate,
+    generated_tokens,
     load_config,
     readout,
     readout_document,
@@ -37,7 +38,7 @@ FIXED_SLOTS = ["PT", "Custom GPU (T4)", "Custom GPU (A10G)", "Pay-per-token",
                "Custom GPU (L40)", "Custom GPU (A100)", "Custom GPU (L4)"]
 SURFACE, INK, INK_2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
 
-INTS = {"concurrency", "idle_seconds", "requests", "errors", "rate_limited", "status", "rep", "successes"}
+INTS = {"completion_tokens", "concurrency", "idle_seconds", "requests", "errors", "rate_limited", "status", "rep", "successes"}
 FLOATS = {"latency_ms", "rps", "p50", "p95", "p99", "duration_s"}
 
 
@@ -68,7 +69,7 @@ def fetch_run(run_id: str, catalog: str, schema: str, query) -> tuple[list[dict]
     if not summary:
         raise SystemExit(f"No summary rows for {run_id} in {t}.serving_bench_summary")
     requests = [normalize(r) for r in query(
-        f"SELECT endpoint, phase, concurrency, idle_seconds, latency_ms, success, status "
+        f"SELECT endpoint, phase, concurrency, idle_seconds, latency_ms, success, status, completion_tokens "
         f"FROM {t}.serving_bench_requests WHERE run_id = '{run_id}' AND phase IN ('load', 'idle_probe')")]
     # Counted from requests so runs saved before the summary had a rate_limited column work too.
     for level in summary:
@@ -345,7 +346,7 @@ def main() -> int:
     summary, requests, day = fetch_run(args.run_id, uc["catalog"], uc["schema"], cli_query(args.profile))
     meta = {
         "run_id": args.run_id, "model": cfg["model"]["hf_name"], "task": cfg["model"]["task"],
-        "input_tokens": cfg["load_test"]["input_tokens"], "date": day, "ai_env": cfg["model"].get("ai_env"),
+        "input_tokens": cfg["load_test"]["input_tokens"], "output_tokens": generated_tokens(requests), "date": day, "ai_env": cfg["model"].get("ai_env"),
         "workspace": WorkspaceClient(profile=args.profile).config.host.rstrip("/"),
         "load_test": cfg["load_test"], "idle_test": cfg.get("idle_test") or {},
         "endpoints": [ep | {"label": endpoint_label(ep)} for ep in cfg["endpoints"]],

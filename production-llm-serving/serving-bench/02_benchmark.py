@@ -56,7 +56,7 @@ nest_asyncio.apply()
 _nb_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 PROJECT_DIR = "/Workspace" + "/".join(_nb_path.split("/")[:-1])
 sys.path.insert(0, f"{PROJECT_DIR}/lib")
-from common import (endpoint_label, load_config, parse_response, readout, readout_document, readout_markdown,
+from common import (endpoint_label, generated_tokens, load_config, parse_response, readout, readout_document, readout_markdown,
                     request_payload, requests_for_level, stop_sweep, wait_for_endpoint)
 
 dbutils.widgets.text("config_path", "")  # e.g. {PROJECT_DIR}/configs/<model>.yml
@@ -320,6 +320,7 @@ table = readout_markdown(rows)
 displayHTML(f"<pre>{table}</pre>")
 print(table)
 meta = {"run_id": RUN_ID, "model": MODEL["hf_name"], "task": TASK, "input_tokens": PROMPT_TOKENS, "ai_env": MODEL.get("ai_env"),
+        "output_tokens": generated_tokens(request_rows),
         "date": STARTED_AT.date().isoformat(), "workspace": WORKSPACE_URL, "load_test": LT, "idle_test": IDLE,
         "endpoints": [ep | {"label": label} for label, ep in ENDPOINTS.items()]}
 dbutils.notebook.exit(json.dumps({**meta, "readout": rows, "readout_markdown": table,

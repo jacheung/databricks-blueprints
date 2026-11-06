@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -6,7 +7,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
 from common import (endpoint_label, ensure_results_tables, incompatibility_message, parse_response, readout, readout_document, readout_markdown,
-                    request_payload, requests_for_level, stop_sweep, vllm_entrypoint)  # noqa: E402
+                    request_payload, requests_for_level, stop_sweep, generated_tokens, token_stats, trace_token_usage,
+                    vllm_entrypoint)  # noqa: E402
 
 
 def test_embedding_payloads():
@@ -207,3 +209,39 @@ def test_ensure_results_tables_names_the_grants_on_failure():
 
     with pytest.raises(PermissionError, match=r"main\.bench.*USE CATALOG.*CREATE TABLE.*PERMISSION_DENIED"):
         ensure_results_tables(denied, {"catalog": "main", "schema": "bench"})
+
+
+def test_token_stats_summarizes_a_sample():
+    assert token_stats([100, 200, 300, 400, 1000]) == {"n": 5, "avg": 400, "p50": 300, "p90": 1000, "max": 1000}
+    assert token_stats([7]) == {"n": 1, "avg": 7, "p50": 7, "p90": 7, "max": 7}
+    assert token_stats([]) is None
+
+
+def _chat_span(input_tokens, output_tokens):
+    usage = json.dumps({"input_tokens": input_tokens, "output_tokens": output_tokens})
+    return {"attributes": {"mlflow.spanType": '"CHAT_MODEL"', "mlflow.chat.tokenUsage": usage}}
+
+
+def test_trace_token_usage_prefers_the_trace_total_and_falls_back_to_chat_spans():
+    spans = [{"attributes": {"mlflow.spanType": '"AGENT"'}}, _chat_span(512, 42), _chat_span(1828, 145)]
+    with_total = {"info": {"token_usage": {"input_tokens": 2340, "output_tokens": 187}}, "data": {"spans": spans}}
+    assert trace_token_usage(with_total) == {"input_tokens": 2340, "output_tokens": 187}
+    assert trace_token_usage({"info": {}, "data": {"spans": spans}}) == {"input_tokens": 2340, "output_tokens": 187}
+    assert trace_token_usage({"info": {}, "data": {"spans": spans[:1]}}) is None
+
+
+def test_generated_tokens_is_the_median_over_successful_load_requests():
+    rows = [{"phase": "load", "success": True, "completion_tokens": n} for n in (90, 100, 128)]
+    rows += [{"phase": "load", "success": False, "completion_tokens": None},
+             {"phase": "warmup", "success": True, "completion_tokens": 5}]
+    assert generated_tokens(rows) == 100
+    assert generated_tokens([{"phase": "load", "success": True, "completion_tokens": None}]) is None
+
+
+def test_chat_readout_states_the_output_cap_and_what_was_generated():
+    rows = readout([{"endpoint": "PT", "concurrency": 1, "rps": 1, "p50": 9, "p95": 9, "errors": 0}], [])
+    meta = {"run_id": "r", "model": "o/m", "task": "chat", "input_tokens": 2000, "output_tokens": 97,
+            "date": "d", "workspace": "w", "endpoints": [{"name": "databricks-m", "method": "ppt", "label": "PT"}],
+            "load_test": {"concurrency_levels": [1], "requests_per_level": 100, "max_tokens": 128}}
+    assert "- Output: up to 128 tokens; median 97 generated." in readout_document(meta, rows)
+    assert "- Output:" not in readout_document(meta | {"task": "embedding"}, rows)
