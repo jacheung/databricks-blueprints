@@ -5,7 +5,7 @@
 # MAGIC
 # MAGIC Logs `models.query_embedding.hf_name` (gte-large-en-v1.5, the model behind `ai_search.embedding_endpoint`) as a
 # MAGIC sentence-transformers pyfunc and registers it with Express `env_pack`, following
-# MAGIC `production-llm-serving/serving-bench` `01_deploy`. `serp_query_embedding` then serves it on a dedicated GPU.
+# MAGIC `llm-serving-bench` `01_deploy`. `serp_query_embedding` then serves it on a dedicated GPU.
 # MAGIC
 # MAGIC **Raw vectors, not normalized.** The pay-per-token endpoint returns unnormalized GTE vectors (norm ~24); the index
 # MAGIC stored product vectors the same way and ranks by L2 distance, so a unit-normalized query vector points the same

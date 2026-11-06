@@ -17,6 +17,7 @@ orchestration; the customer approves choices. Files in this folder:
 | `02_benchmark.py` | Notebook: concurrency sweep + idle test → UC tables; exits with the readout JSON |
 | `00_discover.py` | Notebook wrapper around `lib/discover.py` for in-workspace agents |
 | `lib/make_readout.py` | Builds `readouts/<model>/` (markdown + charts) from a run's UC data |
+| `00_profile.py` | Notebook: measures input/output tokens from the customer's sample prompts or MLflow traces; exits the stats as JSON |
 | `00_compat_check.py` | Notebook: loads the model and runs one inference on a given AI env; exits `{ok, ...}` JSON |
 | `lib/common.py`, `lib/hf_gpu_estimator.py` | Helpers the notebooks and scripts import (config, payloads, readout, GPU memory fit) |
 
@@ -65,19 +66,40 @@ env's libraries is only known by trying (step 4).
 
 ## 3. Get approval, write the config
 
-Ask which options to benchmark with a multi-select checkbox (`AskUserQuestion`, `multiSelect: true`)
+First settle the request shape: one prompt of `load_test.input_tokens` is sent to every endpoint and,
+for chat, replies are capped at `load_test.max_tokens`. The shape can change which option wins, so ask
+before the method questions (single-select, in the same `AskUserQuestion` call, first):
+
+- **Default: 256 tokens in, 128 out (Recommended)**: for embeddings, just "256 tokens in".
+- **Enter my own**: ask for input tokens and, for chat, output tokens.
+- **Measure from my sample prompts**: ask for a JSONL of real requests in the workspace or a volume
+  (`{"text": ...}` per line for embedding, `{"messages": [...]}` for chat) or, for chat, an MLflow
+  experiment with traces. Upload the folder (step 4), then submit `00_profile` on serverless CPU like
+  the benchmark job, with `base_parameters` `hf_name`, `task`, and `samples_path` (chat: `endpoint`,
+  normally the model's PPT endpoint) or `experiment_id`. Show the `n`, avg, P50 and P90 from
+  `notebook_output.result`; use the P50 unless the customer prefers P90.
+
+Check that the shape fits. For chat with a custom endpoint, `input + max_tokens` must be at most
+`model.max_model_len`. For embedding, input must be at most the model's `max_position_embeddings`
+(HF `config.json`). If it doesn't fit, say so and ask. Don't silently truncate or raise
+`max_model_len`; that changes the GPU fit from discovery.
+
+Then ask which options to benchmark with a multi-select checkbox (`AskUserQuestion`, `multiSelect: true`)
 listing only viable options: one question for PT/PPT, one for custom GPU shapes with the recommended
 shape first and marked "(Recommended)". Drop a question whose method has nothing viable, and say why
 in one line in the other question's text (e.g. "Custom GPU isn't possible: the model needs ~181 GiB,
 more than any single GPU"). If nothing at all is viable, report why and stop.
 
 Then confirm parameters for what was picked: PT capacity (default: one increment); scale-to-zero
-on/off for custom (off gives stable throughput numbers; on lets the idle test show cold starts). Mention that dedicated endpoints bill until deleted, and that `02_benchmark`
+on/off for custom (off gives stable throughput numbers; on lets the idle test show cold starts); and
+whether to run the idle test, stating the time it adds (`sum(idle_seconds) × reps`: ~25 min for the
+default, an hour or more for extra reps or longer idles). Mention that dedicated endpoints bill until deleted, and that `02_benchmark`
 deletes the ones it created when it finishes (`cleanup.delete_endpoints_after_benchmark`).
 
 Write `configs/<hf repo name, lowercased>.yml` (e.g. `configs/gte-large-en-v1.5.yml`; the same name
 as its readout). If it already exists for this model, reuse it and edit only what changed. Contents: `model` block from discovery output plus `task`; `unity_catalog`; the approved
-`endpoint` blocks; `load_test`/`idle_test` from `configs/example.yml` unless the customer wants changes
+`endpoint` blocks; `load_test`/`idle_test` from `configs/example.yml`, with the chosen request shape in
+`load_test.input_tokens`/`max_tokens`, unless the customer wants changes
 (smaller `requests_per_level` and `idle_test.idle_seconds: []` for a quick pass). Show it before deploying.
 
 If `hf.files_accessible` is false (gated repo without approved access), `02_benchmark` can't load the
@@ -186,6 +208,9 @@ lambda sql: [r.asDict() for r in spark.sql(sql).collect()])` and `write_readout(
 Re-run it any time to regenerate charts from the same run.
 
 Present `readout_markdown` plus short takeaways grounded in the numbers:
+- The request shape it ran at (input tokens; for chat, the output cap and the median generated from
+  the readout's Settings). If the median is well below `max_tokens`, say that the replies came out
+  shorter than the target shape.
 - Peak RPS and where it saturates; beyond saturation, extra concurrency adds queueing, not throughput.
 - Latency at saturation vs C=1.
 - Latency after the longest idle vs warm, its std deviation, and any idle failures. Don't call a

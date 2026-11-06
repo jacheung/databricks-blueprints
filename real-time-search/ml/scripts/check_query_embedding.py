@@ -27,7 +27,10 @@ from databricks.sdk import WorkspaceClient  # noqa: E402
 MIN_COSINE, MAX_NORM_GAP, N_QUERIES, N_SEARCHES = 0.999, 0.01, 200, 20
 # Hybrid top-200 isn't deterministic at the tail: the same text query run twice overlaps 0.990 min / 0.9992 mean
 # (20 queries, 2026-11-02), so result overlap is a sanity check just outside that noise, not exact equality.
-MIN_OVERLAP, MIN_OVERLAP_MEAN = 0.97, 0.99
+# 2026-11-06, index rebuilt after the workspace cleanup bot deleted it: text-only runs are now identical (1.0), but the
+# custom vector swaps a few near-tied tail items (worst: 9 at ranks 192-200 for a misspelled query, min 0.955; top 10
+# identical for all 20 queries). The user lowered the minimum to 0.95; the mean stays 0.99.
+MIN_OVERLAP, MIN_OVERLAP_MEAN = 0.95, 0.99
 
 
 def cosine(a, b):

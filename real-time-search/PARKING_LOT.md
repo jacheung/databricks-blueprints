@@ -18,6 +18,8 @@ Items deliberately deferred, not overlooked. Scope stays at QAC + SERP. Check he
 
 **Entry points:** the ML bundle's QAC L1 notebook (emit the empty-prefix row), the app's `/qac` handler (allow an empty prefix, merge in recent searches), and the QAC L2 training notebook (empty-prefix impressions in training).
 
+**Built so far (app, 2026-11-05):** a basic version, with no L2 and no new table. Focus the empty search box and pills show. A fresh shopper gets trending searches: `/api/trending`, the prefix table's top completions over the 26 one-letter prefixes, at most 3 words each, by `pop_7d`. After Play, the shopper gets the replayed session's own searches, newest first, no repeats. These come from the Play response on the client side, not from `session_events` or a real-time feature. Still parked: the `prefix = ''` row, recent searches read back from the stream, user-feature personalization, and the L2 rerank.
+
 ---
 
 ## 2 — Search-as-you-type (product tiles in the typeahead)
@@ -81,4 +83,14 @@ question.
 **Why deferred:** it regenerates the clickstream, so features, the QAC table, QAC L2 training and evaluation all rerun (data + ml tracks). The demo was fixed by stricter scenario selection instead (data/PLAN.md, 2026-11-03).
 
 **Entry points:** `data/src/rts_data/datagen.py` (`simulate`, `Catalog.build`), its tests, then the clickstream job and the ml track's QAC notebooks.
+
+---
+
+## 8 — Recommended for you (home-page product row)
+
+**What:** a row of about 6 products on the home page for the signed-in persona: `/api/search` for their top category, with `user_id`, in L2 order. It changes when you switch persona.
+
+**Why deferred:** it's nice, but the demo has to showcase real-time features through QAC and SERP, and this row is neither (it's a SERP call on page load, untimed). It was removed on 2026-11-05 together with the "Picking up where you left off" row (a SERP search for the session's next query); zero-query pills replace that one (item 1).
+
+**Entry points:** the `Rail` component and its two usages in `app/frontend/src/App.jsx` as of commit `020d2cc`.
 

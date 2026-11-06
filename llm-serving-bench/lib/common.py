@@ -58,6 +58,43 @@ def parse_response(task: str, body: dict) -> dict:
         raise ValueError(f"Unexpected {task} response: {str(body)[:200]}") from error
 
 
+def token_stats(values: list[int]) -> dict | None:
+    """Summary of a measured token count for 00_profile; None if there were no samples."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    pick = lambda p: ordered[min(int(len(ordered) * p / 100), len(ordered) - 1)]  # noqa: E731
+    return {"n": len(ordered), "avg": round(statistics.mean(ordered)), "p50": pick(50), "p90": pick(90),
+            "max": ordered[-1]}
+
+
+def generated_tokens(requests: list[dict]) -> int | None:
+    """Median completion tokens over successful load requests: what chat replies actually produced."""
+    counts = [r["completion_tokens"] for r in requests
+              if r["phase"] == "load" and r["success"] and r.get("completion_tokens") is not None]
+    return round(statistics.median(counts)) if counts else None
+
+
+def trace_token_usage(trace: dict) -> dict | None:
+    """Token usage of an MLflow trace (`.to_dict()`): the trace total, else the sum of its CHAT_MODEL spans."""
+    import json
+
+    usage = trace.get("info", {}).get("token_usage")
+    if usage:
+        return {"input_tokens": usage["input_tokens"], "output_tokens": usage["output_tokens"]}
+    total_input, total_output = 0, 0
+    for span in trace.get("data", {}).get("spans", []):
+        attrs = span.get("attributes", {})
+        if json.loads(attrs.get("mlflow.spanType", '"UNKNOWN"')) != "CHAT_MODEL":
+            continue
+        raw = attrs.get("mlflow.chat.tokenUsage")
+        if isinstance(raw, str):
+            per_span = json.loads(raw)
+            total_input += per_span.get("input_tokens", 0)
+            total_output += per_span.get("output_tokens", 0)
+    return {"input_tokens": total_input, "output_tokens": total_output} if total_input else None
+
+
 def wait_for_endpoint(w, name: str, timeout_minutes: int = 60, poll_interval: int = 30) -> bool:
     """Ready means READY *and* NOT_UPDATING; READY alone can still be mid config update."""
     from databricks.sdk.service.serving import EndpointStateConfigUpdate, EndpointStateReady
@@ -215,6 +252,10 @@ def readout_document(meta: dict, rows: list[dict]) -> str:
         "\n- Custom chat runs vLLM's OpenAI-compatible server in fp16 (custom LLM serving)."
         if meta["task"] == "chat" and any(ep["method"] == "custom" for ep in meta["endpoints"]) else ""
     )
+    output_line = (
+        f"\n- Output: up to {lt.get('max_tokens', 128)} tokens; median {meta.get('output_tokens') or '?'} generated."
+        if meta["task"] == "chat" else ""
+    )
     return f"""# {meta['model']} ({meta['task']})
 
 Run `{meta['run_id']}` on {meta['date']} in {meta['workspace']}.
@@ -223,7 +264,7 @@ Run `{meta['run_id']}` on {meta['date']} in {meta['workspace']}.
 
 ## Settings
 
-- Input: {meta['input_tokens']} tokens, same text for every request.
+- Input: {meta['input_tokens']} tokens, same text for every request.{output_line}
 - Concurrency levels: {', '.join(map(str, lt['concurrency_levels']))}; requests per level: {requests}.
 - Idle test: {idle_line}; one probe per rep after each idle duration.
 - Saturation concurrency: the lowest level reaching 90% of peak RPS. Levels with more than 1% failed

@@ -38,7 +38,7 @@ endpoints:
     method: ppt
 
 load_test:
-  input_tokens: 256
+  input_tokens: 256            # request shape: default 256/128, the customer's numbers, or 00_profile's P50
   concurrency_levels: [1, 2, 4, 8, 16, 32]
   requests_per_level: 100      # minimum per level
   requests_per_client: 20      # per level: max(requests_per_level, requests_per_client × concurrency)
@@ -46,7 +46,7 @@ load_test:
   stop_error_rate: 0.5         # stop an endpoint's sweep after a level with more errors than this
   warmup_requests: 5
   timeout_seconds: 180
-  max_tokens: 128              # chat only
+  max_tokens: 128              # chat only: output cap (a reply can stop earlier; the readout shows the median)
 
 idle_test:
   idle_seconds: [5, 30, 60, 300]   # [] skips the idle experiment

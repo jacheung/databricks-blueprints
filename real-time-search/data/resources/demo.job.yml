@@ -1,5 +1,6 @@
-# Demo scenarios and personas for the app, synced to Lakebase. Run after clickstream_job (and again whenever it
-# refreshes the simulated history: personas are picked from the user features' latest values).
+# Demo scenarios and personas for the app, synced to Lakebase. Run after clickstream_job, and before each demo:
+# time_shift moves the simulated history to end yesterday (batch features fade otherwise), and personas are picked
+# from the user features' latest values.
 resources:
   jobs:
     demo_job:
@@ -12,11 +13,17 @@ resources:
           spec:
             client: "4"
       tasks:
+        - task_key: time_shift
+          environment_key: serverless
+          notebook_task:
+            notebook_path: ../notebooks/time_shift.py
         - task_key: demo_scenarios
           environment_key: serverless
           notebook_task:
             notebook_path: ../notebooks/demo_scenarios.py
         - task_key: demo_personas
+          depends_on:
+            - task_key: time_shift
           environment_key: serverless
           notebook_task:
             notebook_path: ../notebooks/demo_personas.py

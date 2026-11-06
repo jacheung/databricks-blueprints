@@ -5,13 +5,15 @@ from rts_ml.serving import ensure_endpoint
 
 class FakeEndpoints:
     def __init__(self, serving=None):
-        self.serving, self.calls = serving, []  # serving: (entity_name, entity_version) or None if missing
+        self.serving, self.calls = serving, []  # serving: (entity_name, entity_version[, scale_to_zero]) or None
 
     def list(self):
         return [SimpleNamespace(name="ep")] if self.serving else []
 
     def get(self, name):
-        entity = SimpleNamespace(entity_name=self.serving[0], entity_version=self.serving[1])
+        name, version, *scale = self.serving
+        entity = SimpleNamespace(entity_name=name, entity_version=version,
+                                 scale_to_zero_enabled=scale[0] if scale else False)
         return SimpleNamespace(config=SimpleNamespace(served_entities=[entity]))
 
     def create(self, name, config, route_optimized):
@@ -22,7 +24,7 @@ class FakeEndpoints:
 
 
 def entity(version):
-    return SimpleNamespace(entity_name="main.s.model", entity_version=version)
+    return SimpleNamespace(entity_name="main.s.model", entity_version=version, scale_to_zero_enabled=False)
 
 
 def test_creates_a_missing_endpoint():
@@ -41,3 +43,10 @@ def test_leaves_an_endpoint_already_serving_the_version():
     w = SimpleNamespace(serving_endpoints=FakeEndpoints(serving=("main.s.model", "2")))
     assert ensure_endpoint(w, "ep", entity("2"), route_optimized=True) == "unchanged"
     assert w.serving_endpoints.calls == []
+
+
+def test_restores_scale_to_zero_someone_else_turned_on():
+    # e2-demo-fe's cleanup bot turns scale-to-zero on overnight; cold starts make L2 time out to the L1 order.
+    w = SimpleNamespace(serving_endpoints=FakeEndpoints(serving=("main.s.model", "2", True)))
+    assert ensure_endpoint(w, "ep", entity("2"), route_optimized=True) == "updated"
+    assert w.serving_endpoints.calls == [("update", "ep")]

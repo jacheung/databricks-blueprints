@@ -1,6 +1,6 @@
 # Choosing a serving method for an open-source model
 
-<img src="assets/workflow.svg" alt="Serving bench workflow: discover, approve, deploy, benchmark, readout" width="100%">
+<img src="assets/workflow.svg" alt="Serving bench workflow: discover, profile, approve, deploy, benchmark, readout" width="100%">
 
 ## Question
 
@@ -20,6 +20,7 @@ Not every option exists for every model. PT and PPT need a `system.ai` copy of t
 
 ### Scope
 
+- **Request shape:** one prompt of `input_tokens` for every request (default 256) and, for chat, replies capped at `max_tokens` (default 128). Set your own, or measure them from sample prompts or MLflow traces with [00_profile](00_profile.py).
 - **Load test:** a closed-loop concurrency sweep. It measures achieved RPS at each level, not behavior at a target arrival rate.
 - **Statistics:** P50 summarizes typical latency; P95/P99 are exploratory at this sample size.
 - **Idle test:** client-observed latency after up to five minutes of inactivity; it can't separate a cold start from shared-pool load.
@@ -36,11 +37,18 @@ Not every option exists for every model. PT and PPT need a `system.ai` copy of t
 **By hand:** import this folder into a workspace, then:
 
 1. Run [00_discover](00_discover.py) with the `hf_name` and `task` widgets to see which options can serve the model.
-2. Copy [configs/example.yml](configs/example.yml) to `configs/<model>.yml` and paste in the endpoint blocks you want.
-3. Run [01_deploy](01_deploy.py) on Serverless GPU with AI environment `model.ai_env`. If the model check fails, run [00_compat_check](00_compat_check.py) on each of `model.ai_env_candidates` and set `ai_env` to the newest that passes.
-4. Run [02_benchmark](02_benchmark.py) on serverless CPU (about 45–60 minutes with the defaults).
+2. Optional: run [00_profile](00_profile.py) on your sample prompts or traces to measure input and output tokens (for chat, point it at the PPT endpoint discovery found).
+3. Copy [configs/example.yml](configs/example.yml) to `configs/<model>.yml`, paste in the endpoint blocks you want, and set `load_test.input_tokens`/`max_tokens` to your request shape.
+4. Run [01_deploy](01_deploy.py) on Serverless GPU with AI environment `model.ai_env`. If the model check fails, run [00_compat_check](00_compat_check.py) on each of `model.ai_env_candidates` and set `ai_env` to the newest that passes.
+5. Run [02_benchmark](02_benchmark.py) on serverless CPU (about 45–60 minutes with the defaults).
 
 Results land in `{catalog}.{schema}.serving_bench_requests` and `serving_bench_summary`, keyed by `run_id`. Build the readout with `python lib/make_readout.py --config configs/<model>.yml --run-id <run_id> --profile <profile>`.
+
+**Next step: serve behind Unity Gateway.** If PT wins, create a Unity Gateway model service with the
+PT endpoint as the primary destination and the model's pay-per-token endpoint as the fallback, and point
+your application at the model service. PT covers baseline load (with burst when regional capacity
+allows), and PPT absorbs spikes within its own rate limits. If the fallback is used a lot, add PT
+capacity. See [routing and fallbacks](https://docs.databricks.com/aws/en/ai-gateway/configure-traffic-splitting).
 
 **Cleanup:** `02_benchmark` deletes the PT and custom endpoints it created once results are saved. If a run fails first, delete them with `databricks serving-endpoints delete <name>`. Shared PPT endpoints are never deleted.
 
