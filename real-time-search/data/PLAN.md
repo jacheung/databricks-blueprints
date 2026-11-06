@@ -31,8 +31,14 @@ Update this file, plus this track's one status line in the top-level file, at th
   If L2 rankings stop reacting to a signed-in user, or SERP L2 stops helping, check this first:
   `SELECT DATE(event_time), COUNT(*), SUM(user_n_clicks_30d) FROM <rts_user_offline_* holding user_n_clicks_30d> GROUP BY 1 ORDER BY 1`
   (the same per day for `rts_item_offline_*`). Totals falling day by day after the sim's `end_date` mean stale history.
-  Fix: rerun `clickstream_job` with fresh dates (`rebuild_data=true`, after `teardown_job` with `confirm=yes`), then the
-  demo scenarios and personas.
+  Fix: run `scripts/pre_demo.sh` (or just `demo_job`) before a demo. `demo_job`'s first task, `time_shift`, moves `session_events.event_time` forward by whole
+  days so the history ends yesterday, reruns the user/item materialization jobs, and checks the latest windows are
+  within 5% of the best day. An in-place update is safe because each materialization run reads `session_events` as a
+  batch and rewrites its trailing window-end dates (`replaceWhere`); it doesn't read the change feed. **Only
+  `session_events` moves**, so after a shift don't retrain: labels and `session_events_ingest` keep their dates, and
+  training-set user/item features would be a shift behind them. To retrain, rebuild first (`teardown_job` with
+  `confirm=yes`, then `clickstream_job` with `rebuild_data=true`). Pre-demo, not scheduled, while the demo has one
+  user; once others rely on it, schedule `time_shift` daily (~00:10 UTC) instead.
 
 ## Checklist
 
@@ -77,3 +83,14 @@ Update this file, plus this track's one status line in the top-level file, at th
   `features_as_of`; synced to `demo_personas_online`. Picks: Ali Ghodsi `u007808` (Electronics, 39 events), Reynold Xin
   `u003564` (Camera & Photo, 29), Matei Zaharia `u018671` (Clothing, Shoes & Jewelry, 25), all 100% in category.
   Scenario labels no longer say guest or logged in: the app replays them under whoever is signed in.
+- [x] `time_shift` (2026-11-05, `demo_job`'s first task, run green): shifted 7 days; latest windows 0.985-0.997 of the
+  best day. Personas re-picked on full history: Matei is now `u012120` (was `u018671`, picked on decayed features).
+- [x] Reproducible source data (2026-11-06, pytest green, `catalog_prep` rerun green in 2 min with no LLM calls): ESCI pinned to commit `1ebba06`
+  with sha256 checks (`rts_data.sources`; the volume copies match the pinned sizes); `ai_classify` answers committed
+  in `data/snapshots/` (149 KB) and used first by `catalog_prep` (`*_llm` tables for rows they miss); the simulator
+  sorts its inputs (`Catalog.build`), so the same seed gives the same sessions whatever Spark's row order. Checked:
+  re-exporting the categories from the rebuilt tables is byte-identical to the committed snapshot; `products` matches
+  `products_search` (written from the old `products`) on id, title, brand, category, price: 0 rows differ of 170,468;
+  `esci_labels` 187,220 rows. (Time travel to the old versions was past the 7-day file retention.) The
+  sort changes the sessions once versus today's `session_events` (built from an unsorted order), so the next
+  `clickstream_job` rebuild re-picks scenarios and personas; after that, rebuilds repeat.
