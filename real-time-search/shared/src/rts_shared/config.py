@@ -93,3 +93,19 @@ def sim_dates(cfg: dict, today: date) -> dict:
     return {"start_date": (end - timedelta(days=sim["history_days"] - 1)).isoformat(),
             "end_date": end.isoformat(),
             "test_split_after": (end - timedelta(days=sim["test_days"] - 1)).isoformat()}
+
+
+def shift_days(cfg: dict, first_event_date: date, today: date) -> int:
+    """Whole days to move the simulated history so it ends yesterday again, as a fresh clickstream_sim run would."""
+    days = (date.fromisoformat(sim_dates(cfg, today)["start_date"]) - first_event_date).days
+    if days < 0:
+        raise ValueError(f"simulated history starts {-days} days ahead of sim_dates; not shifting it backwards")
+    return days
+
+
+def window_strength(daily: list[tuple[date, float]]) -> dict:
+    """A Count feature's per-day totals from its offline table, (window-end date, sum). Every full window holds about the
+    same total, so a stale history shows as the latest window falling below the best day."""
+    latest, best = max(daily), max(s for _, s in daily)
+    return {"latest_date": latest[0].isoformat(), "latest": int(latest[1]), "best": int(best),
+            "ratio": round(latest[1] / best, 3)}

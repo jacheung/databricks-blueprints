@@ -27,7 +27,14 @@ Update this file, plus this track's one status line in the top-level file, at th
 3. **Step 7:** in-app SERP latency per stage (vs the laptop baseline in step 6) and the README numbers, with the
    caveats: exposure bias (only judged products are ever clicked, which inflates item popularity), mild L1
    popularity leakage, and the sim's intent never drifting within a session
-4. Parked: brand counts (`(session, brand)` / `(user, brand)`), an item-popularity ablation, the 5.5 h hang if it
+4. **Changed from the app session (2026-11-06), for ml to review:** `rts_ml.serving.ensure_endpoint` now compares
+   scale-to-zero along with the model version, so a rerun turns it back off after the e2-demo-fe cleanup bot turns it
+   on overnight (`test_restores_scale_to_zero_someone_else_turned_on`). `scripts/pre_demo.sh` runs the three endpoint
+   tasks and rebuilds `products_hybrid_idx` if missing (the bot deleted it 2026-11-06 02:37 UTC). See the top-level
+   PLAN.md shared resources. Rebuilt index: hybrid recall@200 0.8759 (was 0.876). `check_query_embedding.py`'s
+   per-query hybrid overlap minimum lowered 0.97 → 0.95 (the user): on the new index, text-only runs are identical,
+   but the custom vector swaps near-tied tail items (min 0.955, ranks 128-200 only; top 10 identical for all 20).
+5. Parked: brand counts (`(session, brand)` / `(user, brand)`), an item-popularity ablation, the 5.5 h hang if it
    recurs
 
 ## Checklist

@@ -42,7 +42,7 @@ its own branch in its own worktree, then merges into `main` there (`git merge rt
 | `rts-qac-l2` (CPU Medium, route-optimized, no scale-to-zero) | ml | READY (recreated 2026-11-05 08:46) |
 | Session pipeline `b2e71ddb-8541-4ffa-8c4e-82ecbeca22da` (continuous, Real-Time Mode → Lakebase session tables) | data | RUNNING (restarted 2026-11-05 08:38) |
 | Kafka ingestion pipeline `1fa949e7-2477-4306-9898-66f992328abf` (continuous, topic → `session_events_ingest`) | data | Stopped 2026-11-05 (end of day; was found running); only training/offline features need it, not the app |
-| Hourly user/item batch materializations (Feature Store-managed jobs, ~7 min/run, ~6 tables) | data | Unpaused; pausing them not yet checked |
+| Hourly user/item batch materializations (Feature Store-managed jobs, ~7 min/run, 6 jobs) | data | Running hourly. `update-materialized-feature --pipeline-schedule-state PAUSED` does **not** stop them (tested 2026-11-06 on `item_carts_7d`: the 07:00 UTC run still fired; restored to ACTIVE). `time_shift` runs them by hand (`run_now`) |
 | Lakebase `rts-online-store` (online store, QAC prefixes, demo scenarios) | data | Running (min 4 / max 8 CU, no auto-suspend: bills 24/7) |
 | App `rts-search` (MEDIUM compute; shared with a colleague, CAN_USE) | app | RUNNING (restarted 2026-11-05 08:38; bundle redeployed for CAN_QUERY) |
 | `rts-serp-l2` (T4, route-optimized; DCNv2) | ml | READY (recreated 2026-11-05 08:47) |
@@ -53,6 +53,12 @@ its own branch in its own worktree, then merges into `main` there (`git merge rt
   **Never scale-to-zero (the user, 2026-11-02):** cold starts take minutes against millisecond budgets, so QAC would
   silently fall back to L1 and SERP embedding would time out. Endpoints are always on while in use, deleted otherwise.
 - `rts-vs-endpoint` bills hourly; the workspace sits at its 500-endpoint quota, so deleting it may mean waiting for a slot.
+  `scripts/post_demo.sh` keeps it (and Lakebase); it deletes the serving endpoints and stops the app and both pipelines.
+- **The e2-demo-fe cleanup bot (`fe-infra-management`, SP `57e7dc57-…`) changes our resources.** It deleted
+  `products_hybrid_idx` at 2026-11-06 02:37 UTC and turns scale-to-zero on for all three serving endpoints every night
+  (~02:45 UTC). `scripts/pre_demo.sh` repairs both: it rebuilds a missing index (`serp_l1_ai_search`), and
+  `ensure_endpoint` now treats scale-to-zero as a difference (turning it back off). Its checks fail on either. Lasting
+  fix: an FE infra exception (go/feinfra-jira), not filed yet.
 - Feature Store-managed pipelines and jobs don't appear in `databricks pipelines list-pipelines` or `jobs list`, and
   `pipeline_schedule_state: ACTIVE` doesn't mean the pipeline runs. Get their IDs from
   `databricks api get /api/2.0/feature-engineering/materialized-features/<id>` (the CLI command drops them).
@@ -67,7 +73,11 @@ its own branch in its own worktree, then merges into `main` there (`git merge rt
 4. `databricks apps stop rts-search -p e2-demo-fe` (this also cuts off anyone it's shared with)
 5. Update the state column above.
 
-**Resume after a pause:** turn everything back on, then check it (~6 min).
+**Before a demo (resume after a pause):** from this folder, `scripts/pre_demo.sh` (~15 min). It does the steps below
+plus `demo_job` (`time_shift` moves the simulated history to end yesterday so batch features are full strength, then
+re-picks personas), and ends with `scripts/pre_demo_checks.py`: endpoints READY, VS ONLINE, query embedding, batch
+features current, `/api/checks/personas`, and one Play landing in the session tables. Logs: `/tmp/rts_pre_demo/`.
+What it runs, for doing a step by hand:
 1. In parallel:
    - `cd ml && databricks bundle deploy -t dev -p e2-demo-fe`, then (`--no-wait`):
      - `databricks bundle run qac_l2_job -t dev -p e2-demo-fe --only qac_l2_endpoint` (serves the latest

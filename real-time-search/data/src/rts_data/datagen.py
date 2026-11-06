@@ -65,7 +65,10 @@ class Catalog:
 
     @classmethod
     def build(cls, queries, judged, medians):
-        queries = [q for q in queries if q[0] in judged and q[2] in medians]
+        # Canonical order: draws pick by position (a query in its pool, one draw per judged product), so input order
+        # (Spark row order, which can change between runs) would otherwise change the sessions for the same seed.
+        queries = sorted((q for q in queries if q[0] in judged and q[2] in medians), key=lambda q: q[0])
+        judged = {qid: sorted(products, key=lambda p: p[0]) for qid, products in sorted(judged.items())}
         # Popularity rank is a fixed shuffle of the queries, so it doesn't depend on input order.
         ranked = sorted(range(len(queries)), key=lambda i: hashlib.sha256(str(queries[i][0]).encode()).digest())
         popularity = [0.0] * len(queries)

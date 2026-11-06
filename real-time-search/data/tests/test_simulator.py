@@ -11,7 +11,7 @@ LABEL_MIX = "E" * 12 + "S" * 4 + "C" + "I" * 2   # roughly ESCI US: mostly Exact
 BRANDS = ["sony", "canon", "nikon", "acme"]
 
 
-def tiny_catalog():
+def tiny_catalog(shuffle_seed=None):
     queries, judged = [], {}
     for c, (cat, median) in enumerate(CATS.items()):
         other = next(o for o in CATS if o != cat)
@@ -22,6 +22,13 @@ def tiny_catalog():
             judged[qid] = [(f"{qid}-{i}", label, other if i % 6 == 5 else cat, BRANDS[i % 4],
                             round(median * (0.4 + i / 10), 2))
                            for i, label in enumerate(LABEL_MIX)]
+    if shuffle_seed is not None:  # the order Spark happens to return rows in: queries, each query's products, the dict
+        import random
+        rng = random.Random(shuffle_seed)
+        rng.shuffle(queries)
+        for products in judged.values():
+            rng.shuffle(products)
+        judged = dict(rng.sample(list(judged.items()), len(judged)))
     return Catalog.build(queries, judged, CATS)
 
 
@@ -46,6 +53,13 @@ def test_deterministic_for_a_seed(events):
     assert again == events
     other = list(simulate(tiny_catalog(), {**SIM, "seed": 7}))
     assert other != events
+
+
+def test_same_events_whatever_order_the_inputs_arrive_in(events):
+    # clickstream_sim reads queries and judgements from Spark with no ORDER BY, so row order can change between runs
+    # (e.g. after file compaction). The same seed must still give the same sessions.
+    for shuffle_seed in (1, 2):
+        assert list(simulate(tiny_catalog(shuffle_seed), SIM)) == events
 
 
 def test_event_schema_and_types(events):
