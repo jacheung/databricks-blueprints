@@ -1,6 +1,6 @@
 # Choosing a serving method for an open-source model
 
-<img src="assets/workflow.svg" alt="Serving bench workflow: discover, approve, deploy, benchmark, readout" width="100%">
+<img src="assets/workflow.svg" alt="Serving bench workflow: discover, profile, approve, deploy, benchmark, readout" width="100%">
 
 ## Question
 
