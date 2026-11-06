@@ -126,9 +126,9 @@ for i, (flow, (_, label)) in enumerate(FLOWS.items()):
 # --- Real-time features (left lane, 150-620) -------------------------------------------------------
 panel(40, 150, 520, 470, "REAL-TIME FEATURES", "", "#FFF6F3", "#FFC9BE")
 node("kafka", "Apache Kafka", 160, 200, 280, "clickstream events topic")  # 200-265
-node("rtm", "Spark Real-Time Mode", 140, 305, 320, "session Feature Views pipeline", accent=True)  # 305-370
+node("rtm", "Spark Real-Time Mode", 140, 305, 320, "session Feature Views pipeline")  # 305-370
 node("lakebase", "Lakebase", 140, 450, 320, "online store: session · user · item features",
-     "+ QAC prefix completions", accent=True)  # 450-532
+     "+ QAC prefix completions")  # 450-532
 arrow("M300 265 V301", "fresh")
 arrow("M300 370 V446", "fresh")
 sub(316, 405, "< 1 s freshness", LAVA, "start", 700)
@@ -148,8 +148,8 @@ arrow("M1030 330 V346", "serp")
 # --- L2 reranker (right lane, 445-620) -------------------------------------------------------------
 panel(640, 445, 520, 175, "L2 RERANKER", "personalized: session + logged-in history", "#F4F7F9", "#C9D3D8",
       center=900)
-node("serving", "Model Serving", 665, 515, 210, "LightGBM · CPU", accent=True)  # 515-580
-node("serving", "Model Serving", 925, 515, 210, "DCNv2 · T4 GPU", accent=True)
+node("serving", "Model Serving", 665, 515, 210, "LightGBM · CPU")  # 515-580
+node("serving", "Model Serving", 925, 515, 210, "DCNv2 · T4 GPU")
 arrow("M770 330 V511", "qac")
 arrow("M1030 415 V511", "serp")
 
