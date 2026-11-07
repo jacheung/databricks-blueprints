@@ -23,6 +23,15 @@ shopper has done this session and in past visits.</sub>
   - QAC: L1 + L2 fits the 40 ms server budget, and keystroke → on screen is ~120 ms.
   - SERP: an estimated ~360–370 ms in the app against a 400 ms budget. The in-app measurement is still pending.
 
+Each real-time requirement maps to a managed service whose published numbers fit inside its budget:
+
+| Requirement | Databricks product | Published | Budget |
+|---|---|---|---|
+| QAC: suggest queries on every keystroke | **Lakebase**: managed Postgres for online serving | < 10 ms reads at > 10K QPS ([launch](https://www.databricks.com/company/newsroom/press-releases/databricks-launches-lakebase-new-class-operational-database-ai-apps)) | 40 ms p95 per keystroke, L1 + L2 |
+| SERP: rank relevant products per search | **AI Search**: hybrid keyword + vector search, with built-in reranking | 20–50 ms typical query, standard endpoint ([docs](https://docs.databricks.com/aws/en/ai-search/best-practices)) | 400 ms p95 per search |
+| Both: personalize from the live session | **Feature Views** + **Spark Real-Time Mode**: declarative streaming features, online and offline | p99 200 ms end to end, stream source → online store ([docs](https://docs.databricks.com/aws/en/machine-learning/feature-store/feature-views)) | < 1 s event → online store |
+| Both: rerank with a GPU model, iterate fast | **Model Serving** + **AI Runtime**: serverless GPU training and real-time endpoints | Express deployment skips the container image build ([docs](https://docs.databricks.com/aws/en/machine-learning/model-serving/express-deployments)) | |
+
 Both surfaces retrieve, then rerank. L1 retrieves candidates: a Lakebase prefix lookup for QAC, AI Search hybrid for
 SERP. L2 reranks them with features from the session and the logged-in user's history. When L2 is slow, the app falls
 back to the L1 order. The data is Amazon ESCI plus simulated shopping sessions with a planted intent.
