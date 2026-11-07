@@ -9,21 +9,9 @@ shopper has done this session and in past visits.</sub>
 
 **Question:** What does a real-time search solution on Databricks look like?
 
-**Takeaway:** You can build it end to end on Databricks, with each real-time piece on a managed service:
-
-- **Feature Views** keep clickstream features fresh (event → online store p50 58 ms / p95 442 ms, from Kafka through
-  Spark Real-Time Mode). The same feature definitions build point-in-time training sets offline and are looked up
-  online at serving time, so training and serving can't drift.
-- **AI Runtime** trains the GPU model (DCNv2 on a serverless A10). **Express** deployment has a GPU endpoint ready in
-  about 5–7 minutes, with no image build.
-- **Lakebase** serves online at very low latency: the QAC prefix lookup is p95 3.7 ms, and the session, user and item
-  features behind both rerankers live there too.
-- **AI Search** combines lexical and semantic retrieval (hybrid recall@200 0.876).
-- **Latency is in line with QAC and SERP expectations:**
-  - QAC: L1 + L2 fits the 40 ms server budget, and keystroke → on screen is ~120 ms.
-  - SERP: an estimated ~360–370 ms in the app against a 400 ms budget. The in-app measurement is still pending.
-
-Each real-time requirement maps to a managed service whose published numbers fit inside its budget:
+**Takeaway:** You can build it end to end on Databricks. Each real-time requirement maps to a managed service whose
+published numbers fit inside its budget. In this build QAC meets its budget and SERP is estimated to; see
+[Results](#results).
 
 | Requirement | Databricks product | Published | Budget |
 |---|---|---|---|
