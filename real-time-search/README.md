@@ -35,7 +35,8 @@ back to the L1 order. The data is Amazon ESCI plus simulated shopping sessions w
 `uv run --no-project --with fonttools --with brotli python docs/make_architecture.py`.</sub>
 
 For the data engineering pipeline in depth (pinned source data → catalog → clickstream and features → the stores the
-app reads, with every job and table), see [data/README.md](data/README.md).
+app reads, with every job and table), see [data/README.md](data/README.md). For L2 training and serving (training
+sets, rerankers, evaluation against L1, endpoints), see [ml/README.md](ml/README.md).
 
 ## Results
 
