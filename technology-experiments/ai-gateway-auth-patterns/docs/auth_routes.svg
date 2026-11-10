@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 725" width="1200" height="725" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<defs>
+<style>
+@font-face { font-family: "DM Sans"; font-weight: 600; src: url(data:font/woff2;base64,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) format("woff2"); }
+.t { font-family: "DM Sans", -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; }
+.flow { stroke-dasharray: 8 6; animation: flow 0.8s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -14; } }
+@media (prefers-reduced-motion: reduce) { .flow { animation: none; } }
+</style>
+<marker id="request" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#618794"/></marker>
+<marker id="sp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#FFAB00"/></marker>
+<marker id="user" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#4299E0"/></marker>
+</defs>
+<rect width="1200" height="725" fill="#FFFFFF"/>
+<text x="10.0" y="38" class="t" style="font-size: 20px" fill="#1B3139" text-anchor="start">Route 1: service principal (M2M)</text>
+<text x="10" y="62" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="start">The app authenticates as the SP: every request reaches AI Gateway as one identity.</text>
+<rect x="0" y="100" width="570" height="165" rx="14" fill="#FFFFFF" stroke="#C9D3D8" stroke-width="1"/>
+<text x="20.0" y="130" class="t" fill="#FF3621" text-anchor="start">CALLER</text>
+<text x="20" y="149" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="start">a user or an agent</text>
+<rect x="280" y="167.5" width="200" height="65" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<text x="332.1" y="196.5" class="t" fill="#1B3139" text-anchor="start">User / Agent</text>
+<text x="380.0" y="219.5" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">calls your app</text>
+<rect x="0" y="305" width="570" height="150" rx="14" fill="#FFFFFF" stroke="#C9D3D8" stroke-width="1"/>
+<text x="20.0" y="335" class="t" fill="#FF3621" text-anchor="start">YOUR CLOUD</text>
+<text x="20" y="354" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="start">Cloud Run · Lambda · GKE · etc.</text>
+<rect x="235" y="320" width="320" height="120" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<text x="350.4" y="368.0" class="t" fill="#1B3139" text-anchor="start">Application</text>
+<text x="395.0" y="391.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">authenticates as the SP</text>
+<text x="395.0" y="408.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">with client credentials</text>
+<rect x="15" y="367" width="170" height="65" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<text x="52.2" y="396.0" class="t" fill="#1B3139" text-anchor="start">Secret store</text>
+<text x="100.0" y="419.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">SP client_id + secret</text>
+<path d="M185 399.5 H231" class="flow" fill="none" stroke="#FFAB00" stroke-width="2.5" marker-end="url(#sp)"/>
+<circle cx="210.0" cy="399.5" r="10" fill="#FFFFFF" stroke="#FFAB00" stroke-width="2"/>
+<text x="210.0" y="404.0" class="t" style="font-size: 12px" fill="#1B3139" text-anchor="middle">3</text>
+<path d="M360 232.5 V316" class="flow" fill="none" stroke="#618794" stroke-width="2.5" marker-end="url(#request)"/>
+<path d="M400 320 V236.5" class="flow" fill="none" stroke="#618794" stroke-width="2.5" marker-end="url(#request)"/>
+<circle cx="360" cy="276.25" r="10" fill="#FFFFFF" stroke="#618794" stroke-width="2"/>
+<text x="360.0" y="280.75" class="t" style="font-size: 12px" fill="#1B3139" text-anchor="middle">2</text>
+<text x="344" y="280.25" font-size="12" font-weight="500" fill="#1B3139" text-anchor="end">request</text>
+<text x="416" y="280.25" font-size="12" font-weight="500" fill="#1B3139" text-anchor="start">response</text>
+<rect x="0" y="495" width="570" height="180" rx="14" fill="#FFF6F3" stroke="#FFC9BE" stroke-width="1"/>
+<text x="20.0" y="525" class="t" fill="#FF3621" text-anchor="start">DATABRICKS</text>
+<text x="20" y="544" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="start">token endpoint · AI Gateway</text>
+<rect x="15" y="557" width="270" height="82" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<text x="89.4" y="586.0" class="t" fill="#1B3139" text-anchor="start">Token endpoint</text>
+<text x="150.0" y="609.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">/oidc/v1/token</text>
+<text x="150.0" y="626.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">grant: client_credentials</text>
+<rect x="305" y="557" width="250" height="82" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<image x="369.8" y="568.0" width="24.0" height="24.0" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTUwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDE1MCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0zMy45MDAxIDU1LjE3MDJWMTE1LjdINjguNzhWMTEyLjdIMzYuOTAwMVY1OC4xNzAySDczLjQ5VjYzLjM3MDJINDIuNjlWMTA3LjQ4SDc2LjQ5VjUwLjc5MDJDNzYuNDkgNDguODAxMSA3NS42OTk5IDQ2Ljg5MzUgNzQuMjkzNCA0NS40ODY5QzcyLjg4NjggNDQuMDgwNCA3MC45NzkyIDQzLjI5MDIgNjguOTkgNDMuMjkwMkg0Mi43OTAxQzQxLjU5NzQgNDMuMjg3NiA0MC40NTQzIDQyLjgxMjYgMzkuNjExIDQxLjk2OTNDMzguNzY3NiA0MS4xMjYgMzguMjkyNyAzOS45ODI5IDM4LjI5MDEgMzguNzkwMlYzMC4xMTAySDQ5Ljg0VjExLjc0MDJIMjMuMDVWMzAuMTEwMkgzNS4yOTAxVjM4Ljc5MDJDMzUuMjkwMSA0MC43Nzk0IDM2LjA4MDIgNDIuNjg3IDM3LjQ4NjcgNDQuMDkzNUMzOC44OTMzIDQ1LjUwMDEgNDAuODAwOSA0Ni4yOTAyIDQyLjc5MDEgNDYuMjkwMkg2OUM3MC4xOTI3IDQ2LjI5MjkgNzEuMzM1OCA0Ni43Njc4IDcyLjE3OTEgNDcuNjExMkM3My4wMjI1IDQ4LjQ1NDUgNzMuNDk3NCA0OS41OTc2IDczLjUgNTAuNzkwMlY1NS4xNzAySDMzLjkwMDFaTTczLjQ5IDEwNC40OEg0NS42OVY2Ni4zNzAySDczLjQ5VjEwNC40OFpNMjYuMDUgMTQuNzQwMkg0Ni44NFYyNy4xMTAySDI2LjA1VjE0Ljc0MDJaIiBmaWxsPSIjRkY1RjQ2Ii8+CjxwYXRoIGQ9Ik04MSA1OC4xNjk5SDExMy4xVjExMi43SDczLjVWMTI1LjYxSDU4LjE3QzU2LjU3ODcgMTI1LjYxIDU1LjA1MjYgMTI2LjI0MiA1My45Mjc0IDEyNy4zNjdDNTIuODAyMiAxMjguNDkzIDUyLjE3IDEzMC4wMTkgNTIuMTcgMTMxLjYxVjEzOC4yMkg5Ny44N1YxMzEuNjFDOTcuODcgMTMwLjAxOSA5Ny4yMzc5IDEyOC40OTMgOTYuMTEyNyAxMjcuMzY3Qzk0Ljk4NzUgMTI2LjI0MiA5My40NjEzIDEyNS42MSA5MS44NyAxMjUuNjFIODEuMjJWMTI4LjYxSDkxLjg0QzkyLjYzNTcgMTI4LjYxIDkzLjM5ODggMTI4LjkyNiA5My45NjE0IDEyOS40ODlDOTQuNTI0IDEzMC4wNTEgOTQuODQgMTMwLjgxNCA5NC44NCAxMzEuNjFWMTM1LjIySDU1LjEzVjEzMS42MUM1NS4xMyAxMzAuODE0IDU1LjQ0NjEgMTMwLjA1MSA1Ni4wMDg3IDEyOS40ODlDNTYuNTcxMyAxMjguOTI2IDU3LjMzNDQgMTI4LjYxIDU4LjEzIDEyOC42MUg3Ni41VjExNS43SDExNi4xVjU1LjE2OTlIODFWNTguMTY5OVoiIGZpbGw9IiNGRjVGNDYiLz4KPHBhdGggZD0iTTc2LjUgMzguMzAwMlYzMC4xMTAySDg4LjRWMTEuNzQwMkg2MS42VjMwLjExMDJINzMuNVYzOC4zMDAySDc2LjVaTTY0LjYgMTQuNzQwMkg4NS40VjI3LjExMDJINjQuNlYxNC43NDAyWiIgZmlsbD0iI0ZGNUY0NiIvPgo8cGF0aCBkPSJNMTAwLjE2IDMwLjExMDJIMTExLjdWMzguNzkwMkMxMTEuNjk3IDM5Ljk4MjkgMTExLjIyMiA0MS4xMjYgMTEwLjM3OSA0MS45NjkzQzEwOS41MzYgNDIuODEyNiAxMDguMzkzIDQzLjI4NzYgMTA3LjIgNDMuMjkwMkg4MVY0Ni4yOTAySDEwNy4yQzEwOS4xODkgNDYuMjkwMiAxMTEuMDk3IDQ1LjUwMDEgMTEyLjUwMyA0NC4wOTM1QzExMy45MSA0Mi42ODcgMTE0LjcgNDAuNzc5NCAxMTQuNyAzOC43OTAyVjMwLjExMDJIMTI3VjExLjc0MDJIMTAwLjE2VjMwLjExMDJaTTEwMy4xNiAxNC43NDAySDEyNFYyNy4xMTAySDEwMy4xNlYxNC43NDAyWiIgZmlsbD0iI0ZGNUY0NiIvPgo8cGF0aCBkPSJNODEuOTkgMTA0LjQ5VjEwNy40OUgxMDcuMzFWNjMuMzc5OUg4MVY2Ni4zNzk5SDEwNC4zMVYxMDQuNDlIODEuOTlaIiBmaWxsPSIjRkY1RjQ2Ii8+Cjwvc3ZnPgo="/>
+<text x="401.8" y="586.0" class="t" fill="#1B3139" text-anchor="start">AI Gateway</text>
+<text x="430.0" y="609.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">runs as the SP</text>
+<text x="430.0" y="626.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">one identity for every caller</text>
+<path d="M250 440 V553" class="flow" fill="none" stroke="#FFAB00" stroke-width="2.5" marker-end="url(#sp)"/>
+<circle cx="250" cy="498.5" r="10" fill="#FFFFFF" stroke="#FFAB00" stroke-width="2"/>
+<text x="250.0" y="503.0" class="t" style="font-size: 12px" fill="#1B3139" text-anchor="middle">4</text>
+<path d="M272 557 V444" class="flow" fill="none" stroke="#FFAB00" stroke-width="2.5" marker-end="url(#sp)"/>
+<text x="230" y="473" font-size="12" font-weight="500" fill="#1B3139" text-anchor="end">↓ client_id + secret</text>
+<text x="230" y="490" font-size="12" font-weight="500" fill="#1B3139" text-anchor="end">↑ token as the SP</text>
+<path d="M400 440 V553" class="flow" fill="none" stroke="#FFAB00" stroke-width="2.5" marker-end="url(#sp)"/>
+<circle cx="400" cy="498.5" r="10" fill="#FFFFFF" stroke="#FFAB00" stroke-width="2"/>
+<text x="400.0" y="503.0" class="t" style="font-size: 12px" fill="#1B3139" text-anchor="middle">5</text>
+<path d="M425 557 V444" class="flow" fill="none" stroke="#618794" stroke-width="2.5" marker-end="url(#request)"/>
+<text x="440" y="473" font-size="12" font-weight="500" fill="#1B3139" text-anchor="start">↓ SP token</text>
+<text x="440" y="490" font-size="12" font-weight="500" fill="#1B3139" text-anchor="start">↑ response</text>
+<text x="640.0" y="38" class="t" style="font-size: 20px" fill="#1B3139" text-anchor="start">Route 2: on-behalf-of (OBO) via an SP</text>
+<text x="640" y="62" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="start">The app trades the user's ID token for a Databricks token that carries the user.</text>
+<rect x="630" y="100" width="570" height="165" rx="14" fill="#FFFFFF" stroke="#C9D3D8" stroke-width="1"/>
+<text x="650.0" y="130" class="t" fill="#FF3621" text-anchor="start">USER + IdP</text>
+<text x="650" y="149" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="start">Google · Okta · IAP · etc.</text>
+<rect x="910" y="167.5" width="200" height="65" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<text x="992.5" y="196.5" class="t" fill="#1B3139" text-anchor="start">User</text>
+<text x="1010.0" y="219.5" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">calls your app</text>
+<rect x="645" y="159.0" width="200" height="82" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<text x="679.8" y="188.0" class="t" fill="#1B3139" text-anchor="start">Identity provider</text>
+<text x="745.0" y="211.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">issues the user's ID token</text>
+<text x="745.0" y="228.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">registered with Databricks</text>
+<path d="M910 190 H849" class="flow" fill="none" stroke="#4299E0" stroke-width="2.5" marker-end="url(#user)"/>
+<path d="M845 210 H906" class="flow" fill="none" stroke="#4299E0" stroke-width="2.5" marker-end="url(#user)"/>
+<circle cx="877.5" cy="200" r="10" fill="#FFFFFF" stroke="#4299E0" stroke-width="2"/>
+<text x="877.5" y="204.5" class="t" style="font-size: 12px" fill="#1B3139" text-anchor="middle">1</text>
+<text x="877.5" y="180" font-size="12" font-weight="500" fill="#1B3139" text-anchor="middle">sign in</text>
+<text x="877.5" y="234" font-size="12" font-weight="500" fill="#1B3139" text-anchor="middle">ID token</text>
+<rect x="630" y="305" width="570" height="150" rx="14" fill="#FFFFFF" stroke="#C9D3D8" stroke-width="1"/>
+<text x="650.0" y="335" class="t" fill="#FF3621" text-anchor="start">YOUR CLOUD</text>
+<text x="650" y="354" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="start">Cloud Run · Lambda · GKE · etc.</text>
+<rect x="865" y="320" width="320" height="120" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<text x="980.4" y="368.0" class="t" fill="#1B3139" text-anchor="start">Application</text>
+<text x="1025.0" y="391.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">holds the SP credentials and</text>
+<text x="1025.0" y="408.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">exchanges each user's ID token</text>
+<rect x="645" y="367" width="170" height="65" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<text x="682.2" y="396.0" class="t" fill="#1B3139" text-anchor="start">Secret store</text>
+<text x="730.0" y="419.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">SP client_id + secret</text>
+<path d="M815 399.5 H861" class="flow" fill="none" stroke="#FFAB00" stroke-width="2.5" marker-end="url(#sp)"/>
+<circle cx="840.0" cy="399.5" r="10" fill="#FFFFFF" stroke="#FFAB00" stroke-width="2"/>
+<text x="840.0" y="404.0" class="t" style="font-size: 12px" fill="#1B3139" text-anchor="middle">3</text>
+<path d="M990 232.5 V316" class="flow" fill="none" stroke="#4299E0" stroke-width="2.5" marker-end="url(#user)"/>
+<path d="M1030 320 V236.5" class="flow" fill="none" stroke="#618794" stroke-width="2.5" marker-end="url(#request)"/>
+<circle cx="990" cy="276.25" r="10" fill="#FFFFFF" stroke="#4299E0" stroke-width="2"/>
+<text x="990.0" y="280.75" class="t" style="font-size: 12px" fill="#1B3139" text-anchor="middle">2</text>
+<text x="974" y="280.25" font-size="12" font-weight="500" fill="#1B3139" text-anchor="end">request + ID token</text>
+<text x="1046" y="280.25" font-size="12" font-weight="500" fill="#1B3139" text-anchor="start">response</text>
+<rect x="630" y="495" width="570" height="180" rx="14" fill="#FFF6F3" stroke="#FFC9BE" stroke-width="1"/>
+<text x="650.0" y="525" class="t" fill="#FF3621" text-anchor="start">DATABRICKS</text>
+<text x="650" y="544" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="start">token endpoint · AI Gateway</text>
+<rect x="645" y="557" width="270" height="99" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<text x="719.4" y="586.0" class="t" fill="#1B3139" text-anchor="start">Token endpoint</text>
+<text x="780.0" y="609.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">/oidc/v1/token · token exchange</text>
+<text x="780.0" y="626.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">SP credentials valid?</text>
+<text x="780.0" y="643.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">JWT email → a Databricks user?</text>
+<rect x="935" y="557" width="250" height="82" rx="8" fill="#FFFFFF" stroke="#8A9BA3" stroke-width="1"/>
+<image x="999.8" y="568.0" width="24.0" height="24.0" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTUwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDE1MCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0zMy45MDAxIDU1LjE3MDJWMTE1LjdINjguNzhWMTEyLjdIMzYuOTAwMVY1OC4xNzAySDczLjQ5VjYzLjM3MDJINDIuNjlWMTA3LjQ4SDc2LjQ5VjUwLjc5MDJDNzYuNDkgNDguODAxMSA3NS42OTk5IDQ2Ljg5MzUgNzQuMjkzNCA0NS40ODY5QzcyLjg4NjggNDQuMDgwNCA3MC45NzkyIDQzLjI5MDIgNjguOTkgNDMuMjkwMkg0Mi43OTAxQzQxLjU5NzQgNDMuMjg3NiA0MC40NTQzIDQyLjgxMjYgMzkuNjExIDQxLjk2OTNDMzguNzY3NiA0MS4xMjYgMzguMjkyNyAzOS45ODI5IDM4LjI5MDEgMzguNzkwMlYzMC4xMTAySDQ5Ljg0VjExLjc0MDJIMjMuMDVWMzAuMTEwMkgzNS4yOTAxVjM4Ljc5MDJDMzUuMjkwMSA0MC43Nzk0IDM2LjA4MDIgNDIuNjg3IDM3LjQ4NjcgNDQuMDkzNUMzOC44OTMzIDQ1LjUwMDEgNDAuODAwOSA0Ni4yOTAyIDQyLjc5MDEgNDYuMjkwMkg2OUM3MC4xOTI3IDQ2LjI5MjkgNzEuMzM1OCA0Ni43Njc4IDcyLjE3OTEgNDcuNjExMkM3My4wMjI1IDQ4LjQ1NDUgNzMuNDk3NCA0OS41OTc2IDczLjUgNTAuNzkwMlY1NS4xNzAySDMzLjkwMDFaTTczLjQ5IDEwNC40OEg0NS42OVY2Ni4zNzAySDczLjQ5VjEwNC40OFpNMjYuMDUgMTQuNzQwMkg0Ni44NFYyNy4xMTAySDI2LjA1VjE0Ljc0MDJaIiBmaWxsPSIjRkY1RjQ2Ii8+CjxwYXRoIGQ9Ik04MSA1OC4xNjk5SDExMy4xVjExMi43SDczLjVWMTI1LjYxSDU4LjE3QzU2LjU3ODcgMTI1LjYxIDU1LjA1MjYgMTI2LjI0MiA1My45Mjc0IDEyNy4zNjdDNTIuODAyMiAxMjguNDkzIDUyLjE3IDEzMC4wMTkgNTIuMTcgMTMxLjYxVjEzOC4yMkg5Ny44N1YxMzEuNjFDOTcuODcgMTMwLjAxOSA5Ny4yMzc5IDEyOC40OTMgOTYuMTEyNyAxMjcuMzY3Qzk0Ljk4NzUgMTI2LjI0MiA5My40NjEzIDEyNS42MSA5MS44NyAxMjUuNjFIODEuMjJWMTI4LjYxSDkxLjg0QzkyLjYzNTcgMTI4LjYxIDkzLjM5ODggMTI4LjkyNiA5My45NjE0IDEyOS40ODlDOTQuNTI0IDEzMC4wNTEgOTQuODQgMTMwLjgxNCA5NC44NCAxMzEuNjFWMTM1LjIySDU1LjEzVjEzMS42MUM1NS4xMyAxMzAuODE0IDU1LjQ0NjEgMTMwLjA1MSA1Ni4wMDg3IDEyOS40ODlDNTYuNTcxMyAxMjguOTI2IDU3LjMzNDQgMTI4LjYxIDU4LjEzIDEyOC42MUg3Ni41VjExNS43SDExNi4xVjU1LjE2OTlIODFWNTguMTY5OVoiIGZpbGw9IiNGRjVGNDYiLz4KPHBhdGggZD0iTTc2LjUgMzguMzAwMlYzMC4xMTAySDg4LjRWMTEuNzQwMkg2MS42VjMwLjExMDJINzMuNVYzOC4zMDAySDc2LjVaTTY0LjYgMTQuNzQwMkg4NS40VjI3LjExMDJINjQuNlYxNC43NDAyWiIgZmlsbD0iI0ZGNUY0NiIvPgo8cGF0aCBkPSJNMTAwLjE2IDMwLjExMDJIMTExLjdWMzguNzkwMkMxMTEuNjk3IDM5Ljk4MjkgMTExLjIyMiA0MS4xMjYgMTEwLjM3OSA0MS45NjkzQzEwOS41MzYgNDIuODEyNiAxMDguMzkzIDQzLjI4NzYgMTA3LjIgNDMuMjkwMkg4MVY0Ni4yOTAySDEwNy4yQzEwOS4xODkgNDYuMjkwMiAxMTEuMDk3IDQ1LjUwMDEgMTEyLjUwMyA0NC4wOTM1QzExMy45MSA0Mi42ODcgMTE0LjcgNDAuNzc5NCAxMTQuNyAzOC43OTAyVjMwLjExMDJIMTI3VjExLjc0MDJIMTAwLjE2VjMwLjExMDJaTTEwMy4xNiAxNC43NDAySDEyNFYyNy4xMTAySDEwMy4xNlYxNC43NDAyWiIgZmlsbD0iI0ZGNUY0NiIvPgo8cGF0aCBkPSJNODEuOTkgMTA0LjQ5VjEwNy40OUgxMDcuMzFWNjMuMzc5OUg4MVY2Ni4zNzk5SDEwNC4zMVYxMDQuNDlIODEuOTlaIiBmaWxsPSIjRkY1RjQ2Ii8+Cjwvc3ZnPgo="/>
+<text x="1031.8" y="586.0" class="t" fill="#1B3139" text-anchor="start">AI Gateway</text>
+<text x="1060.0" y="609.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">runs as the user</text>
+<text x="1060.0" y="626.0" font-size="12" font-weight="400" fill="#5A6F77" text-anchor="middle">per-user limits · audit · cost</text>
+<path d="M874 440 V553" class="flow" fill="none" stroke="#FFAB00" stroke-width="2.5" marker-end="url(#sp)"/>
+<path d="M888 440 V553" class="flow" fill="none" stroke="#4299E0" stroke-width="2.5" marker-end="url(#user)"/>
+<circle cx="881" cy="498.5" r="10" fill="#FFFFFF" stroke="#4299E0" stroke-width="2"/>
+<text x="881.0" y="503.0" class="t" style="font-size: 12px" fill="#1B3139" text-anchor="middle">4</text>
+<path d="M908 557 V444" class="flow" fill="none" stroke="#4299E0" stroke-width="2.5" marker-end="url(#user)"/>
+<text x="860" y="473" font-size="12" font-weight="500" fill="#1B3139" text-anchor="end">↓ SP creds + user JWT</text>
+<text x="860" y="490" font-size="12" font-weight="500" fill="#1B3139" text-anchor="end">↑ token as the user</text>
+<path d="M1030 440 V553" class="flow" fill="none" stroke="#4299E0" stroke-width="2.5" marker-end="url(#user)"/>
+<circle cx="1030" cy="498.5" r="10" fill="#FFFFFF" stroke="#4299E0" stroke-width="2"/>
+<text x="1030.0" y="503.0" class="t" style="font-size: 12px" fill="#1B3139" text-anchor="middle">5</text>
+<path d="M1055 557 V444" class="flow" fill="none" stroke="#618794" stroke-width="2.5" marker-end="url(#request)"/>
+<text x="1070" y="473" font-size="12" font-weight="500" fill="#1B3139" text-anchor="start">↓ OBO token</text>
+<text x="1070" y="490" font-size="12" font-weight="500" fill="#1B3139" text-anchor="start">↑ response</text>
+<path d="M600.0 20 V675" stroke="#C9D3D8" stroke-width="2" stroke-dasharray="8 6"/>
+<path d="M341 700.5 H379" fill="none" stroke="#618794" stroke-width="3.5" stroke-dasharray="8 6"/>
+<text x="391.0" y="705" class="t" style="font-size: 14px" fill="#1B3139" text-anchor="start">request / response</text>
+<path d="M559 700.5 H597" fill="none" stroke="#FFAB00" stroke-width="3.5" stroke-dasharray="8 6"/>
+<text x="609.3" y="705" class="t" style="font-size: 14px" fill="#1B3139" text-anchor="start">SP identity</text>
+<path d="M723 700.5 H761" fill="none" stroke="#4299E0" stroke-width="3.5" stroke-dasharray="8 6"/>
+<text x="772.7" y="705" class="t" style="font-size: 14px" fill="#1B3139" text-anchor="start">user identity</text>
+</svg>

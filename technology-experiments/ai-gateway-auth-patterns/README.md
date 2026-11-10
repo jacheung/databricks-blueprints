@@ -4,118 +4,38 @@ Two authentication patterns for accessing Databricks AI Gateway from external ap
 
 ---
 
-## Route 1: Pure Service Principal (M2M)
+## The two routes
 
-The application authenticates as the SP itself. All requests appear as a single identity.
+![Route 1 (M2M): the app reads SP credentials from a secret store, gets a client_credentials token, and calls AI Gateway as the SP. Route 2 (OBO): the user signs in to an IdP, the app exchanges the user's ID token plus SP credentials for a token carrying the user's identity, and calls AI Gateway as the user](docs/auth_routes.svg)
 
+Each number in the diagram is a row in the table below.
+
+| Phase | Route 1: Pure SP (M2M) | Route 2: OBO via SP |
+|-------|------------------------|---------------------|
+| ① User sign-in | — | User signs in to an external IdP (Google Sign-In, Okta, IAP, …), which returns an **ID token** (JWT with an `email` claim) |
+| ② Request to app | User/Agent calls the app | User calls the app with the ID token (header, cookie, or redirect callback) |
+| ③ SP credentials | App reads `client_id` + `client_secret` from a secret store | Same |
+| ④ Get a Databricks token | `POST /oidc/v1/token`, `grant_type=client_credentials` → token as **the SP** | `POST /oidc/v1/token`, token exchange: SP credentials authenticate the call, the user's JWT is the `subject_token` → token as **the user** |
+| ⑤ Call AI Gateway | Runs as the SP | Runs as the user |
+| Rate limits, audit, cost | Shared: one identity for every caller | Per user |
+| Endpoint permission needed by | The SP | The user (the SP's permissions don't matter) |
+| Extra setup | — | IdP registered in the Account Console; SP allowed to perform token exchange; each user exists in Databricks with the same email (see below) |
+| Use when | Simplest to implement; per-user attribution isn't needed | You need per-user limits, audit, or cost attribution |
+
+The token exchange in ④ (full example in `02_sp_obo_auth_patterns`):
+
+```python
+requests.post(
+    f"{WORKSPACE_URL}/oidc/v1/token",
+    data={
+        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+        "subject_token": user_id_token,  # the user's JWT from the IdP
+        "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
+        "scope": "all-apis",
+    },
+    auth=(SP_CLIENT_ID, SP_CLIENT_SECRET),  # HTTP Basic: the SP authenticates the exchange
+)
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                                                                     │
-│  ┌──────────┐       ┌──────────────────┐       ┌────────────────┐  │
-│  │          │       │                  │       │                │  │
-│  │  Secret  │──2───▶│   Application    │──3───▶│   Databricks   │  │
-│  │  Store   │       │   (Cloud Run,    │       │   /oidc/v1/    │  │
-│  │          │◀──────│    Lambda, etc.) │◀──4───│   token        │  │
-│  └──────────┘       │                  │       │                │  │
-│                     │                  │       └────────────────┘  │
-│                     │                  │                           │
-│                     │                  │──5───▶┌────────────────┐  │
-│                     │                  │       │  AI Gateway    │  │
-│                     │                  │◀──6───│  (as SP)       │  │
-│                     └──────────────────┘       └────────────────┘  │
-│                              ▲                                     │
-│                              │1                                    │
-│                     ┌────────┴─────────┐                           │
-│                     │   User / Agent   │                           │
-│                     └──────────────────┘                           │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-| Step | Action |
-|------|--------|
-| 1 | User/Agent sends request to the application |
-| 2 | App retrieves SP credentials (`client_id` + `client_secret`) from secret store |
-| 3 | App requests token: `grant_type=client_credentials` |
-| 4 | Databricks returns token with **SP identity** |
-| 5 | App queries AI Gateway using SP token |
-| 6 | Response returned — audit logs attribute request to **the SP** |
-
-**Characteristics:**
-- All users share one identity (the SP)
-- Rate limits applied to the SP as a whole
-- No per-user audit trail
-- Simplest to implement
-
----
-
-## Route 2: On-Behalf-Of (OBO) via Service Principal
-
-The application authenticates users via an external IdP, then exchanges their token for a Databricks token carrying the **user's** identity.
-
-```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                  │
-│                            ┌──────────────┐                                      │
-│                            │ Secret Store │                                      │
-│                            └──────┬───────┘                                      │
-│                                   │4                                             │
-│                                   ▼                                              │
-│  ┌──────────────┐       ┌──────────────────┐       ┌────────────────────────┐    │
-│  │              │       │                  │       │                        │    │
-│  │  IdP         │       │   Application    │──5───▶│   Databricks           │    │
-│  │  (e.g., GCP, │       │   (Cloud Run,    │       │   /oidc/v1/token       │    │
-│  │   Okta, etc.)│       │    Lambda, etc.) │◀──6───│                        │    │
-│  │              │       │                  │       │   Validates:           │    │
-│  └──────────────┘       │                  │       │   - SP credentials ✓   │    │
-│        ▲   │            │                  │       │   - User JWT email     │    │
-│       1│   │2           │                  │       │     → Databricks user ✓│    │
-│        │   ▼            │                  │       └────────────────────────┘    │
-│  ┌──────────────┐       │                  │                                     │
-│  │              │──3───▶│                  │──7───▶┌────────────────────────┐    │
-│  │  User        │       │                  │       │  AI Gateway            │    │
-│  │              │◀──9───│                  │◀──8───│  (as USER)             │    │
-│  └──────────────┘       └──────────────────┘       └────────────────────────┘    │
-│                                                                                  │
-└──────────────────────────────────────────────────────────────────────────────────┘
-```
-
-| Step | Action |
-|------|--------|
-| 1 | User authenticates with external IdP (e.g., Google Sign-In, Okta, IAP) |
-| 2 | IdP returns **user's ID token** (JWT with `email` claim) to the user |
-| 3 | User sends request to App, ID token included (via header, cookie, or redirect callback) |
-| 4 | App retrieves SP credentials (`client_id` + `client_secret`) from secret store |
-| 5 | App calls Databricks token endpoint with: | 
-|   | - `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` |
-|   | - `subject_token=<user's JWT>` |
-|   | - `subject_token_type=urn:ietf:params:oauth:token-type:id_token` |
-|   | - HTTP Basic Auth: `client_id` / `client_secret` (SP credentials) |
-| 6 | Databricks validates both SP + user JWT, returns token with **user identity** |
-| 7 | App queries AI Gateway using OBO token |
-| 8 | AI Gateway returns response to App |
-| 9 | App returns response to User — audit logs attribute request to **the user** |
-
-**Characteristics:**
-- Each user has their own identity at the Databricks layer
-- Per-user rate limiting in AI Gateway
-- Per-user audit trail and cost attribution
-- User must have permissions on the endpoint (SP permissions irrelevant for resource access)
-- Requires IdP registered in Databricks Account Console
-
----
-
-## Prerequisites Comparison
-
-| Requirement | Pure SP | OBO via SP |
-|-------------|---------|------------|
-| Service Principal (client_id/secret) | ✓ | ✓ |
-| Secret store for SP credentials | ✓ | ✓ |
-| External IdP registered in Account Console | ✗ | ✓ |
-| User exists in Databricks (email match) | ✗ | ✓ |
-| User authenticates to your app | ✗ | ✓ |
-| SP needs endpoint permissions | ✓ | ✗ |
-| User needs endpoint permissions | ✗ | ✓ |
 
 ---
 
