@@ -63,7 +63,3 @@ Best for: use cases where you want a fully open-source vector store, need to con
 | Structure | 3 notebooks | 3 notebooks |
 | Review App | Yes | No |
 | Pattern | Chain | Chain |
-
-## Retired
-
-The early [parameterized-rag-agent experiment](../retired/parameterized-rag-agent/) is preserved in the retired collection. It demonstrates arithmetic tool calls; retrieval was not implemented.
