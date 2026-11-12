@@ -101,9 +101,11 @@ def create_endpoint(name, served_entity):
     if endpoint_exists(name):
         print(f"  {name}: exists — reusing as is")
         return
+    # Model-unit PT (e.g. gpt-oss) has its own create API; the generic one asks for a workload size.
+    path = "/api/2.0/serving-endpoints/pt" if "provisioned_model_units" in served_entity else "/api/2.0/serving-endpoints"
     w.api_client.do(
         "POST",
-        "/api/2.0/serving-endpoints",
+        path,
         body={"name": name, "config": {"served_entities": [served_entity]}, "tags": TAGS},
     )
     print(f"  {name}: created — {w.config.host}/ml/endpoints/{name}")
