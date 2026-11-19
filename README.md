@@ -14,7 +14,7 @@ Unfinished work lives in its kind's folder and is marked **In progress** below.
 | [real-time-search](solutions/real-time-search/) | Solution | In progress | Personalized e-commerce query auto-completion and search results ranking (L1 retrieval, L2 rerank). |
 | [recommender-system-end-to-end](solutions/recommender-system-end-to-end/) | Solution | Complete | Cart-checkout recommendations: collaborative filtering for logged-in users, market basket analysis for guests. |
 | [rag-blueprints](solutions/rag-blueprints/) | Solution | Complete | Two parameterized RAG chains: Databricks Vector Search and open-source FAISS. |
-| [scaling-forecasting](solutions/scaling-forecasting/) | Solution | In progress | Thousands of per-group Prophet models with Spark pandas UDFs: forecast-only, or saved as slim JSON in a Lakebase-backed feature table and served through one router endpoint. |
+| [scaling-forecasting](solutions/scaling-forecasting/) | Solution | Complete | Thousands of per-group Prophet models with Spark pandas UDFs: forecast-only, or saved as slim JSON in a Lakebase-backed feature table and served through one router endpoint. |
 | [OTEL-fine-tuning](solutions/OTEL-fine-tuning/) | Solution | In progress | Turning OpenTelemetry traces into ChatML training data and fine-tuning with TRL, Ray Train, or Mosaic AI. |
 | [llm-serving-bench](benchmarks/llm-serving-bench/) | Benchmark | Complete | Which Databricks serving method meets a Hugging Face model's throughput and latency needs. |
 | [service-policy-benchmark](benchmarks/service-policy-benchmark/) | Benchmark | Complete | Unity Gateway service-policy accuracy, and client-side `ai_decide` versus service policies. |
