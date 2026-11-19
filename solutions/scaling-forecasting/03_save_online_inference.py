@@ -65,6 +65,9 @@ source_table = f"{catalog}.{schema}.{forecasting.source_table_name(n_groups, dbu
 # MAGIC The feature table's primary key is `group_name`, and its change data feed lets the online
 # MAGIC store sync only changed rows. Retraining upserts rows (`mode="merge"`), so the router logged
 # MAGIC below doesn't need a new version when models change.
+# MAGIC
+# MAGIC Paths 2 and 3 both write `prophet_models`. Don't run them at the same time on the same schema:
+# MAGIC their merges conflict (`ConcurrentAppendException`). Run one after the other, or use separate schemas.
 
 # COMMAND ----------
 

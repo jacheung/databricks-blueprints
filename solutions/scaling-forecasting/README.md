@@ -28,6 +28,7 @@ What we found (serverless; 10 groups × 50k hourly rows, then 100k groups × 5k 
 
 Limitations:
 
+- Paths 2 and 3 write the same `prophet_models` table, so don't run them at the same time on one schema: concurrent merges fail with `ConcurrentAppendException`. Run them one after the other, or give each its own schema.
 - A slim model only forecasts forward. It can't predict in-sample, plot history, or cross-validate. Keep the training data if you need those.
 - Path 3's Lakebase online store and endpoint don't scale to zero, so they bill while they exist. The last cell of `03_save_online_inference` deletes them; it's commented out so a run doesn't tear down what it just built.
 - Endpoint latency wasn't measured server-side; the round trips above include network and client start-up.
