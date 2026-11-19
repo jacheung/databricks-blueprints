@@ -1,0 +1,29 @@
+bundle:
+  name: spark_vs_ray_forecasting
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    default: main
+  schema:
+    default: jon_cheung
+  n_groups:
+    default: "1000"
+  skew:
+    default: "false"
+  partitions:
+    default: "0" # 0 = one partition per group
+  node_type:
+    default: m5.4xlarge
+  spark_version:
+    default: 18.x-cpu-ml-scala2.13
+
+targets:
+  e2-demo-fe:
+    default: true
+    mode: development
+    workspace:
+      profile: e2-demo-fe
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}

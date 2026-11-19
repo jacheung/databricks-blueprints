@@ -1,0 +1,36 @@
+resources:
+  jobs:
+    ray_arm:
+      name: "[${bundle.target}] spark-vs-ray-forecasting: ray arm"
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: n_groups
+          default: ${var.n_groups}
+        - name: skew
+          default: ${var.skew}
+        - name: partitions
+          default: ${var.partitions}
+        - name: warehouse_id
+          default: ${resources.sql_warehouses.ray_read.id}
+      job_clusters:
+        - job_cluster_key: ray_64_cpus
+          new_cluster:
+            spark_version: ${var.spark_version}
+            node_type_id: ${var.node_type}
+            num_workers: 10 # Ray: 8 workers x 16 = 128 CPUs (same as Spark arm); 2 workers left for the Delta write
+            enable_elastic_disk: true
+            data_security_mode: SINGLE_USER
+            single_user_name: ${workspace.current_user.userName}
+      tasks:
+        - task_key: ray_arm
+          job_cluster_key: ray_64_cpus
+          libraries:
+            - pypi:
+                package: prophet==1.5.0
+            - pypi:
+                package: ray[default,data]==2.60.0
+          notebook_task:
+            notebook_path: ../02_ray_arm.py

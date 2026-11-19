@@ -1,0 +1,36 @@
+resources:
+  jobs:
+    save_offline:
+      name: "[${bundle.target}] scaling-forecasting: path 2 · save → offline inference"
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: n_groups
+          default: "10"
+        - name: rows_per_group
+          default: "50000"
+        - name: skew
+          default: "false"
+      environments:
+        - environment_key: default
+          spec:
+            client: "4"
+            dependencies:
+              - prophet==1.5.0
+              - mlflow==3.18.0
+              - databricks-feature-engineering==0.18.3
+              - databricks-sdk==0.167.0
+              - scikit-learn
+      tasks:
+        - task_key: generate_data
+          environment_key: default
+          notebook_task:
+            notebook_path: ../00_generate_timeseries_data.py
+        - task_key: save_offline_inference
+          depends_on:
+            - task_key: generate_data
+          environment_key: default
+          notebook_task:
+            notebook_path: ../02_save_offline_inference.py

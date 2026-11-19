@@ -1,0 +1,18 @@
+resources:
+  jobs:
+    readout:
+      name: "[${bundle.target}] spark-vs-ray-forecasting: readout"
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+      environments:
+        - environment_key: default
+          spec:
+            client: "4"
+      tasks:
+        - task_key: readout
+          environment_key: default
+          notebook_task:
+            notebook_path: ../03_readout.py

@@ -1,0 +1,26 @@
+resources:
+  jobs:
+    generate_data:
+      name: "[${bundle.target}] spark-vs-ray-forecasting: generate data"
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: n_groups
+          default: ${var.n_groups}
+        - name: rows_per_group
+          default: "50000"
+        - name: skew
+          default: ${var.skew}
+      environments:
+        - environment_key: default
+          spec:
+            client: "4"
+            dependencies:
+              - scikit-learn
+      tasks:
+        - task_key: generate_data
+          environment_key: default
+          notebook_task:
+            notebook_path: ../00_generate_timeseries_data.py

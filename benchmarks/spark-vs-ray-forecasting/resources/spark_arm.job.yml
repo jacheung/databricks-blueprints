@@ -1,0 +1,32 @@
+resources:
+  jobs:
+    spark_arm:
+      name: "[${bundle.target}] spark-vs-ray-forecasting: spark arm"
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: n_groups
+          default: ${var.n_groups}
+        - name: skew
+          default: ${var.skew}
+        - name: partitions
+          default: ${var.partitions}
+      job_clusters:
+        - job_cluster_key: spark_64_cores
+          new_cluster:
+            spark_version: ${var.spark_version}
+            node_type_id: ${var.node_type}
+            num_workers: 8 # 8 x 16 = 128 task slots, matching Ray's 128 CPUs
+            enable_elastic_disk: true
+            data_security_mode: SINGLE_USER
+            single_user_name: ${workspace.current_user.userName}
+      tasks:
+        - task_key: spark_arm
+          job_cluster_key: spark_64_cores
+          libraries:
+            - pypi:
+                package: prophet==1.5.0
+          notebook_task:
+            notebook_path: ../01_spark_arm.py

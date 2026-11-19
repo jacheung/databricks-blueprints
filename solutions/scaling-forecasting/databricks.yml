@@ -1,0 +1,20 @@
+bundle:
+  name: scaling_forecasting
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    default: serverless_stable_jon_cheung_catalog
+  schema:
+    default: scaling_forecasting
+
+targets:
+  fevm-jon:
+    default: true
+    mode: development
+    workspace:
+      profile: fevm-jon
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+
