@@ -1,4 +1,9 @@
-"""Per-group Prophet functions. Pure pandas, applied per group with Spark `applyInPandas`."""
+"""Per-group Prophet functions. Pure pandas, applied per group with Spark `applyInPandas`.
+
+To bring your own model, replace the four model-specific functions: `_fit`, `_forecast`,
+`serialize_model` and `deserialize_model`, and its pins in `requirements.txt`. Everything
+else here, the notebooks and `router_model.py` are built on those four.
+See docs/bring-your-own-model.md."""
 
 from __future__ import annotations
 
@@ -21,6 +26,10 @@ FORECAST_SCHEMA = ("group_name string, ds string, yhat double, yhat_lower double
 
 MODEL_COLUMNS = ["group_name", "model_json", "json_bytes", "trained_at"]
 MODEL_SCHEMA = "group_name string, model_json string, json_bytes long, trained_at timestamp"
+
+BACKTEST_COLUMNS = ["group_name", "horizon", "cutoff", "mae", "rmse", "coverage"]
+BACKTEST_SCHEMA = ("group_name string, horizon int, cutoff string, mae double, rmse double, "
+                   "coverage double")
 
 
 def source_table_name(n_groups: int, skew: bool) -> str:
@@ -78,6 +87,28 @@ def train_and_forecast(pdf: pd.DataFrame, horizon: int = 14) -> pd.DataFrame:
     return out[FORECAST_COLUMNS]
 
 
+def backtest(pdf: pd.DataFrame, horizon: int = 14) -> pd.DataFrame:
+    """Hold out one group's last `horizon` rows, fit on the rest, and score the forecast
+    against them (one row). `coverage` is the share of actuals inside Prophet's default
+    80% interval. No MAPE: it blows up when `y` is near zero, as in the synthetic data.
+
+    This is a single window: error at this horizon from one cutoff. To see how stable that
+    error is over time, repeat it over several cutoffs (a rolling-origin backtest, e.g.
+    `prophet.diagnostics.cross_validation`) and over several horizons."""
+    pdf = pdf.sort_values("ds")
+    train, test = pdf.iloc[:-horizon], pdf.iloc[-horizon:]
+    out = _forecast(_fit(train), horizon)
+    actual = test["y"].to_numpy()
+    err = out["yhat"].to_numpy() - actual
+    inside = (actual >= out["yhat_lower"].to_numpy()) & (actual <= out["yhat_upper"].to_numpy())
+    return pd.DataFrame({"group_name": [pdf["group_name"].iloc[0]],
+                         "horizon": [horizon],
+                         "cutoff": [str(pd.Timestamp(train["ds"].iloc[-1]))],
+                         "mae": [float(np.abs(err).mean())],
+                         "rmse": [float(np.sqrt((err ** 2).mean()))],
+                         "coverage": [float(inside.mean())]})[BACKTEST_COLUMNS]
+
+
 def slim_for_forecasting(model):
     """Drop what a forward forecast never reads: the training history (kept as its last
     row, which `make_future_dataframe` needs) and Stan's in-sample `trend`. At 50k hourly
@@ -89,11 +120,23 @@ def slim_for_forecasting(model):
     return model
 
 
-def train_to_json(pdf: pd.DataFrame) -> pd.DataFrame:
-    """Fit one group's model and return it as slim Prophet JSON (one row)."""
+def serialize_model(model) -> str:
+    """A fitted model as the string stored in `model_json`: slim Prophet JSON."""
     from prophet.serialize import model_to_json
 
-    model_json = model_to_json(slim_for_forecasting(_fit(pdf)))
+    return model_to_json(slim_for_forecasting(model))
+
+
+def deserialize_model(model_json: str):
+    """Inverse of `serialize_model`."""
+    from prophet.serialize import model_from_json
+
+    return model_from_json(model_json)
+
+
+def train_to_json(pdf: pd.DataFrame) -> pd.DataFrame:
+    """Fit one group's model and return it as slim Prophet JSON (one row)."""
+    model_json = serialize_model(_fit(pdf))
     return pd.DataFrame({"group_name": [pdf["group_name"].iloc[0]],
                          "model_json": [model_json],
                          "json_bytes": [len(model_json.encode())],
@@ -102,9 +145,7 @@ def train_to_json(pdf: pd.DataFrame) -> pd.DataFrame:
 
 def forecast_from_json(model_json: str, horizon: int) -> dict:
     """Forecast `horizon` steps from a serialized model."""
-    from prophet.serialize import model_from_json
-
-    return forecast_from_model(model_from_json(model_json), horizon)
+    return forecast_from_model(deserialize_model(model_json), horizon)
 
 
 def forecast_from_model(model, horizon: int) -> dict:

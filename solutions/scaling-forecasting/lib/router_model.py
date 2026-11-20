@@ -1,8 +1,9 @@
 """Router model (MLflow models-from-code).
 
-One registered model fronts every per-group Prophet model. The models are not in the
-artifact: each request row carries `model_json`, which Feature Engineering looks up by
-`group_name` (online store at serving time, Delta feature table in `score_batch`).
+One registered model fronts every per-group model. The models are not in the artifact:
+each request row carries `model_json`, which Feature Engineering looks up by `group_name`
+(online store at serving time, Delta feature table in `score_batch`). Nothing here is
+model-specific; deserializing and forecasting come from forecasting.py.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import mlflow
 import pandas as pd
 from mlflow.types.schema import Array, ColSpec, DataType, Schema
 
-from forecasting import forecast_from_model
+from forecasting import deserialize_model, forecast_from_model
 
 OUTPUT_COLUMNS = ["group_name", "ds", "yhat", "yhat_lower", "yhat_upper"]
 # UC registration needs an output schema; FE can't infer one without a label.
@@ -23,9 +24,7 @@ OUTPUT_SCHEMA = Schema([ColSpec(DataType.string, "group_name"), ColSpec(Array(Da
 
 @lru_cache(maxsize=256)
 def load_model(model_json: str):
-    from prophet.serialize import model_from_json
-
-    return model_from_json(model_json)
+    return deserialize_model(model_json)
 
 
 class ProphetRouter(mlflow.pyfunc.PythonModel):

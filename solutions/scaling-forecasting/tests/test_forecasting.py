@@ -8,8 +8,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 
-from forecasting import (FORECAST_COLUMNS, MODEL_COLUMNS, forecast_from_json, make_group_series,  # noqa: E402
-                         rows_per_group, source_table_name, train_and_forecast, train_to_json)
+from forecasting import (BACKTEST_COLUMNS, FORECAST_COLUMNS, MODEL_COLUMNS, backtest,  # noqa: E402
+                         deserialize_model, forecast_from_json, make_group_series, rows_per_group,
+                         serialize_model, source_table_name, train_and_forecast, train_to_json)
 
 HORIZON = 14
 
@@ -91,3 +92,50 @@ def test_saved_json_is_slim_and_forecasts_like_full_model():
     slim = forecast_from_model(model_from_json(big.loc[0, "model_json"]), HORIZON)
     assert slim == full
 
+
+def test_backtest_holds_out_last_horizon_rows(series):
+    from forecasting import _fit, _forecast
+
+    np.random.seed(0)
+    row = backtest(series, horizon=HORIZON)
+    assert list(row.columns) == BACKTEST_COLUMNS
+    assert len(row) == 1
+    assert row.loc[0, "group_name"] == "group_01"
+    assert row.loc[0, "horizon"] == HORIZON
+    # cutoff is the last training timestamp, just before the held-out window
+    assert pd.Timestamp(row.loc[0, "cutoff"]) == series["ds"].iloc[-HORIZON - 1]
+
+    train, actual = series.iloc[:-HORIZON], series["y"].iloc[-HORIZON:].to_numpy()
+    np.random.seed(0)
+    fc = _forecast(_fit(train), HORIZON)
+    err = fc["yhat"].to_numpy() - actual
+    assert row.loc[0, "mae"] == pytest.approx(np.abs(err).mean())
+    assert row.loc[0, "rmse"] == pytest.approx(np.sqrt((err ** 2).mean()))
+    inside = (actual >= fc["yhat_lower"].to_numpy()) & (actual <= fc["yhat_upper"].to_numpy())
+    assert row.loc[0, "coverage"] == pytest.approx(inside.mean())
+
+
+def test_backtest_ignores_input_order(series):
+    np.random.seed(0)
+    ordered = backtest(series, horizon=HORIZON)
+    np.random.seed(0)
+    shuffled = backtest(series.sample(frac=1, random_state=0), horizon=HORIZON)
+    pd.testing.assert_frame_equal(ordered, shuffled)
+
+
+def test_serialize_round_trip_forecasts_like_the_fitted_model(series):
+    from forecasting import _fit, forecast_from_model
+
+    model = _fit(series)
+    np.random.seed(0)
+    direct = forecast_from_model(model, HORIZON)
+    restored = deserialize_model(serialize_model(model))
+    np.random.seed(0)
+    assert forecast_from_model(restored, HORIZON) == direct
+
+
+def test_requirements_file_pins_the_installed_prophet():
+    import prophet
+
+    reqs = (Path(__file__).resolve().parents[1] / "lib" / "requirements.txt").read_text().split()
+    assert f"prophet=={prophet.__version__}" in reqs

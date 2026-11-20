@@ -45,6 +45,19 @@ def test_declared_output_schema_matches_predict_output(models):
     assert infer_signature(req, out).outputs == OUTPUT_SCHEMA
 
 
+def test_router_deserializes_through_forecasting(models, monkeypatch):
+    """The router has no model-specific code: swapping the model means editing forecasting.py."""
+    import forecasting
+    import router_model
+
+    calls = []
+    real = forecasting.deserialize_model
+    monkeypatch.setattr(router_model, "deserialize_model", lambda s: calls.append(s) or real(s))
+    load_model.cache_clear()
+    load_model(models["group_01"])
+    assert calls == [models["group_01"]]
+
+
 def test_missing_model_raises_with_group_name():
     req = pd.DataFrame({"group_name": ["group_99"], "horizon": [2], "model_json": [None]})
     with pytest.raises(ValueError, match="group_99"):

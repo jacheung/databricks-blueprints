@@ -10,7 +10,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -q prophet==1.5.0
+# MAGIC %pip install -q -r lib/requirements.txt
 
 # COMMAND ----------
 
@@ -57,6 +57,7 @@ n_groups = int(dbutils.widgets.get("n_groups"))
 suffix = forecasting.source_table_name(n_groups, dbutils.widgets.get("skew") == "true")
 source_table = f"{catalog}.{schema}.{suffix}"
 forecasts_table = f"{catalog}.{schema}.forecasts_{suffix}"
+backtest_table = f"{catalog}.{schema}.backtest_{suffix}"
 fn = partial(forecasting.train_and_forecast, horizon=horizon)
 
 # COMMAND ----------
@@ -68,3 +69,30 @@ forecasts = (spark.read.table(source_table)
 
 forecasts.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(forecasts_table)
 display(spark.sql(f"SELECT count(DISTINCT group_name) AS groups, count(*) AS rows FROM {forecasts_table}"))
+
+# COMMAND ----------
+
+# MAGIC %md ## Backtest at the chosen horizon
+# MAGIC
+# MAGIC For each group, hold out the last `horizon` rows, fit on the rest, and compare the forecast
+# MAGIC with what happened: MAE, RMSE, and `coverage` (the share of actuals inside the 80% interval;
+# MAGIC near 0.8 means the intervals are calibrated). This refits every group, so it takes about as
+# MAGIC long as the forecast above.
+# MAGIC
+# MAGIC This is **one window**: it tells you the error at this horizon from one cutoff, not how
+# MAGIC stable that error is. Before trusting the model, repeat it over several cutoffs (a
+# MAGIC rolling-origin backtest, e.g. `prophet.diagnostics.cross_validation`) to see how much
+# MAGIC performance moves over time, and over several horizons to see where it starts to drop.
+
+# COMMAND ----------
+
+bt = partial(forecasting.backtest, horizon=horizon)
+backtests = (spark.read.table(source_table)
+                  .repartition(n_groups, "group_name")
+                  .groupBy("group_name")
+                  .applyInPandas(bt, forecasting.BACKTEST_SCHEMA))
+
+backtests.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(backtest_table)
+display(spark.sql(f"""SELECT count(*) AS groups, avg(mae) AS avg_mae, percentile(mae, 0.5) AS p50_mae,
+                             percentile(mae, 0.9) AS p90_mae, avg(rmse) AS avg_rmse, avg(coverage) AS avg_coverage
+                      FROM {backtest_table}"""))

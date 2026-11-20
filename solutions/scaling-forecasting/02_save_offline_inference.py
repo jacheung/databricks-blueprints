@@ -16,7 +16,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -q prophet==1.5.0 mlflow==3.18.0 databricks-feature-engineering==0.18.3
+# MAGIC %pip install -q -r lib/requirements.txt mlflow==3.18.0 databricks-feature-engineering==0.18.3
 
 # COMMAND ----------
 
@@ -88,7 +88,6 @@ display(spark.sql(f"""SELECT count(*) AS models, avg(json_bytes) AS avg_json_byt
 # COMMAND ----------
 
 import mlflow  # noqa: E402
-import prophet  # noqa: E402
 from databricks.feature_engineering import FeatureLookup  # noqa: E402
 from pyspark.sql import functions as F  # noqa: E402
 
@@ -112,7 +111,7 @@ with mlflow.start_run(run_name="prophet_router"):
         output_schema=OUTPUT_SCHEMA,  # UC needs one; FE can't infer it without a label
         registered_model_name=model_name,
         code_paths=[os.path.join(lib_dir, "forecasting.py"), os.path.join(lib_dir, "router_model.py")],
-        extra_pip_requirements=[f"prophet=={prophet.__version__}"],
+        extra_pip_requirements=open(os.path.join(lib_dir, "requirements.txt")).read().split(),
     )
 
 client = mlflow.MlflowClient()
