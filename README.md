@@ -11,7 +11,7 @@ Unfinished work lives in its kind's folder and is marked **In progress** below.
 
 | Blueprint | Kind | Status | Focus |
 | --- | --- | --- | --- |
-| [real-time-search](solutions/real-time-search/) | Solution | In progress | Personalized e-commerce query auto-completion and search results ranking (L1 retrieval, L2 rerank). |
+| [real-time-search](https://github.com/jacheung/databricks-real-time-search) | Solution | Moved | Personalized e-commerce query auto-completion and search results ranking (L1 retrieval, L2 rerank). |
 | [recommender-system-end-to-end](solutions/recommender-system-end-to-end/) | Solution | Complete | Cart-checkout recommendations: collaborative filtering for logged-in users, market basket analysis for guests. |
 | [rag-blueprints](solutions/rag-blueprints/) | Solution | Complete | Two parameterized RAG chains: Databricks Vector Search and open-source FAISS. |
 | [scaling-forecasting](solutions/scaling-forecasting/) | Solution | Complete | Thousands of per-group Prophet models with Spark pandas UDFs: forecast-only, or saved as slim JSON in a Lakebase-backed feature table and served through one router endpoint. |
